@@ -31,6 +31,8 @@
       left: 12px;
       right: 12px;
       max-width: 600px;
+      display: flex;
+      flex-direction: column;
     }
     #cmd-log {
       background: rgba(0, 0, 0, 0.75);
@@ -62,6 +64,64 @@
     }
     #cmd-input:focus { border-color: #0f0; }
     #cmd-input::placeholder { color: #555; }
+
+    /* Editor panel */
+    #editor-panel {
+      margin-bottom: 4px;
+    }
+    #editor-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 5px 10px;
+      border-radius: 6px 6px 0 0;
+      border: 1px solid #333;
+      border-bottom: none;
+    }
+    #editor-title {
+      color: #888;
+      font-size: 12px;
+      margin-right: auto;
+    }
+    #editor-toolbar button {
+      background: #222;
+      color: #ccc;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    #editor-toolbar button:hover:not(:disabled) { background: #333; }
+    #editor-toolbar button:disabled { opacity: 0.4; cursor: default; }
+    #editor-run { color: #4c4; border-color: #4c4; }
+    #editor-run:hover:not(:disabled) { background: #1a2e1a; }
+    #editor-stop { color: #c44; border-color: #c44; }
+    #editor-stop:hover:not(:disabled) { background: #2e1a1a; }
+    #editor-collapse {
+      color: #666;
+      border-color: #444;
+      padding: 3px 6px;
+      font-size: 10px;
+    }
+    #editor-status {
+      font-size: 11px;
+      color: #666;
+    }
+    #editor-status.running { color: #4c4; }
+    #editor-status.done { color: #4c4; }
+    #editor-status.stopped { color: #ca4; }
+    #editor-status.error { color: #c44; }
+    #editor-wrap {
+      border: 1px solid #333;
+      border-top: none;
+      border-radius: 0 0 6px 6px;
+      overflow: hidden;
+      height: 220px;
+    }
+    #editor-wrap .cm-editor { height: 100%; }
   </style>
 </head>
 <body>

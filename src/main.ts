@@ -1,5 +1,6 @@
 import { SimLoop } from './sim-loop';
 import { Drone } from './drone';
+import { ProgramEditor } from './visualizer/editor';
 
 const sim = new SimLoop();
 
@@ -24,6 +25,8 @@ function printHtml(html: string): void {
 }
 
 const drone = new Drone(sim, print);
+const editor = new ProgramEditor(document.getElementById('cmd-panel')!, print);
+editor.bind(drone, sim);
 
 // Expose drone and mavlink utilities on window for advanced usage
 (window as any).drone = drone;
