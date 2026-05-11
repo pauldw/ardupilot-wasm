@@ -19,7 +19,14 @@ export class CameraController {
   update(dronePosition: number[]): void {
     // NED to Three.js
     this.followTarget.set(dronePosition[0], -dronePosition[2], -dronePosition[1]);
-    this.controls.target.lerp(this.followTarget, 0.05);
+
+    const delta = new THREE.Vector3().subVectors(this.followTarget, this.controls.target);
+    const lerpFactor = 0.05;
+    const step = delta.multiplyScalar(lerpFactor);
+
+    this.controls.target.add(step);
+    this.camera.position.add(step);
+
     this.controls.update();
   }
 }

@@ -43,7 +43,7 @@ export const MOTOR_TAU = 0.05; // [s]
 // Environment
 export const GRAVITY = 9.81; // [m/s^2]
 export const LINEAR_DRAG_COEFF = 0.15; // [N/(m/s)]
-export const LANDING_GEAR_HEIGHT = 0.06; // [m]
+export const LANDING_GEAR_HEIGHT = 0.0; // [m] model origin is at bottom
 
 // Initial conditions
 export const INITIAL_ALTITUDE = 0.0; // [m] start on ground
