@@ -1,141 +1,148 @@
 import { SimLoop } from './sim-loop';
-import {
-  encodeArm,
-  encodeDisarm,
-  encodeForceArm,
-  encodeSetMode,
-  encodeTakeoff,
-  encodeGotoLocalNED,
-  COPTER_MODE_NAMES,
-} from './mavlink/mavlink';
+import { Drone } from './drone';
 
 const sim = new SimLoop();
 
-const cmdInput = document.getElementById('cmd-input') as HTMLInputElement;
 const cmdLog = document.getElementById('cmd-log') as HTMLDivElement;
+const cmdInput = document.getElementById('cmd-input') as HTMLTextAreaElement;
 
-function log(msg: string): void {
+const history: string[] = [];
+let historyIdx = -1;
+
+function print(msg: string): void {
   const line = document.createElement('div');
   line.textContent = msg;
   cmdLog.appendChild(line);
   cmdLog.scrollTop = cmdLog.scrollHeight;
 }
 
-function handleCommand(raw: string): void {
-  const parts = raw.trim().split(/\s+/);
-  if (parts.length === 0) return;
-  const cmd = parts[0].toLowerCase();
-
-  switch (cmd) {
-    case 'arm': {
-      const force = parts[1]?.toLowerCase() === 'force';
-      sim.sendMavlink(force ? encodeForceArm() : encodeArm());
-      log(force ? 'Sending FORCE ARM command...' : 'Sending ARM command...');
-      break;
-    }
-    case 'disarm':
-      sim.sendMavlink(encodeDisarm());
-      log('Sending DISARM command...');
-      break;
-    case 'mode': {
-      const modeName = parts[1]?.toUpperCase();
-      if (!modeName) {
-        log(`Usage: mode <MODE>. Available: ${COPTER_MODE_NAMES.join(', ')}`);
-        break;
-      }
-      const pkt = encodeSetMode(modeName);
-      if (pkt) {
-        sim.sendMavlink(pkt);
-        log(`Sending MODE ${modeName}...`);
-      } else {
-        log(`Unknown mode: ${modeName}. Available: ${COPTER_MODE_NAMES.join(', ')}`);
-      }
-      break;
-    }
-    case 'takeoff': {
-      const alt = parseFloat(parts[1] ?? '10');
-      if (isNaN(alt) || alt <= 0) {
-        log('Usage: takeoff <altitude_meters>');
-        break;
-      }
-      sim.sendMavlink(encodeTakeoff(alt));
-      log(`Sending TAKEOFF to ${alt}m...`);
-      break;
-    }
-    case 'goto': {
-      const n = parseFloat(parts[1] ?? '');
-      const e = parseFloat(parts[2] ?? '');
-      const u = parseFloat(parts[3] ?? '');
-      if (isNaN(n) || isNaN(e) || isNaN(u)) {
-        log('Usage: goto <north> <east> <up>  (meters from home)');
-        break;
-      }
-      sim.sendMavlink(encodeGotoLocalNED(n, e, -u));
-      log(`Sending GOTO N=${n} E=${e} U=${u}...`);
-      break;
-    }
-    case 'hover': {
-      if (!sim['wasmMode']) {
-        const hoverPwm = 1520;
-        sim.setPwm([hoverPwm, hoverPwm, hoverPwm, hoverPwm]);
-        sim.setArmed(true);
-        log(`Hover: all motors at ${hoverPwm}`);
-      } else {
-        log('In WASM mode, use: mode guided → arm → takeoff 10');
-      }
-      break;
-    }
-    case 'help':
-      log('Commands:');
-      log('  arm [force]     - Arm the motors (force bypasses checks)');
-      log('  disarm          - Disarm the motors');
-      log('  mode <MODE>     - Set flight mode (GUIDED, STABILIZE, etc.)');
-      log('  takeoff <alt>   - Take off to altitude (meters)');
-      log('  goto <n> <e> <u> - Go to position (meters from home)');
-      log('');
-      log('Quick start: mode guided → arm → takeoff 10');
-      break;
-    default:
-      log(`Unknown: ${cmd}. Type "help" for commands.`);
-  }
+function printHtml(html: string): void {
+  const line = document.createElement('div');
+  line.innerHTML = html;
+  cmdLog.appendChild(line);
+  cmdLog.scrollTop = cmdLog.scrollHeight;
 }
 
-cmdInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    const cmd = cmdInput.value;
-    if (cmd.trim()) {
-      log(`> ${cmd}`);
-      handleCommand(cmd);
-    }
-    cmdInput.value = '';
-  }
-});
+const drone = new Drone(sim, print);
 
-log('ArduPilot WASM Simulator');
-log('Loading WASM module...');
-
-sim.startRenderLoop();
+// Expose drone and mavlink utilities on window for advanced usage
+(window as any).drone = drone;
+(window as any).sim = sim;
 
 sim.onMavlinkMessage = (msg) => {
-  switch (msg.type) {
-    case 'command_ack':
-      log(`ACK: command ${msg.command} → ${msg.resultText}`);
-      break;
-    case 'statustext':
-      log(`[AP] ${msg.text}`);
-      break;
-    case 'heartbeat':
-      break;
+  if (msg.type === 'STATUSTEXT') {
+    print(`[AP] ${msg.text}`);
   }
 };
 
-sim.initWasm(log).then((ok) => {
+async function evalCommand(code: string): Promise<void> {
+  printHtml(`<span style="color:#0f0">» ${escapeHtml(code)}</span>`);
+
+  try {
+    // Wrap in async function so `await` works at top level
+    const asyncFn = new Function('drone', 'sim', 'print', 'sleep',
+      `return (async () => { ${code.includes('\n') || code.includes('return') ? code : `return (${code})`} })()`
+    );
+    const result = await asyncFn(drone, sim, print, (ms: number) => drone.sleep(ms));
+    if (result !== undefined) {
+      print(formatResult(result));
+    }
+  } catch (e: any) {
+    // If the expression-return form failed with a syntax error, try as statements
+    if (e instanceof SyntaxError) {
+      try {
+        const asyncFn = new Function('drone', 'sim', 'print', 'sleep',
+          `return (async () => { ${code} })()`
+        );
+        const result = await asyncFn(drone, sim, print, (ms: number) => drone.sleep(ms));
+        if (result !== undefined) {
+          print(formatResult(result));
+        }
+      } catch (e2: any) {
+        printHtml(`<span style="color:#f44">${escapeHtml(e2.toString())}</span>`);
+      }
+    } else {
+      printHtml(`<span style="color:#f44">${escapeHtml(e.toString())}</span>`);
+    }
+  }
+}
+
+function formatResult(val: unknown): string {
+  if (val === null) return 'null';
+  if (val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') {
+    try {
+      return JSON.stringify(val, null, 2);
+    } catch {
+      return String(val);
+    }
+  }
+  return String(val);
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+cmdInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const code = cmdInput.value.trim();
+    if (code) {
+      history.push(code);
+      historyIdx = history.length;
+      evalCommand(code);
+    }
+    cmdInput.value = '';
+  } else if (e.key === 'ArrowUp' && cmdInput.selectionStart === 0) {
+    e.preventDefault();
+    if (historyIdx > 0) {
+      historyIdx--;
+      cmdInput.value = history[historyIdx];
+    }
+  } else if (e.key === 'ArrowDown' && cmdInput.selectionStart === cmdInput.value.length) {
+    e.preventDefault();
+    if (historyIdx < history.length - 1) {
+      historyIdx++;
+      cmdInput.value = history[historyIdx];
+    } else {
+      historyIdx = history.length;
+      cmdInput.value = '';
+    }
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    const val = cmdInput.value;
+    const cursor = cmdInput.selectionStart ?? val.length;
+    const before = val.slice(0, cursor);
+    const match = before.match(/(drone\.\w*)$/);
+    if (match) {
+      const partial = match[1];
+      const prefix = partial.replace('drone.', '');
+      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(drone))
+        .filter(m => m !== 'constructor' && m.startsWith(prefix));
+      if (methods.length === 1) {
+        const completed = 'drone.' + methods[0];
+        cmdInput.value = before.slice(0, -partial.length) + completed + val.slice(cursor);
+        cmdInput.selectionStart = cmdInput.selectionEnd = cursor + (completed.length - partial.length);
+      } else if (methods.length > 1) {
+        print(methods.map(m => 'drone.' + m).join('  '));
+      }
+    }
+  }
+});
+
+print('ArduPilot WASM Simulator - JavaScript Console');
+print('Loading WASM module...');
+
+sim.startRenderLoop();
+
+sim.initWasm(print).then((ok) => {
   if (ok) {
-    log('ArduPilot flight controller active');
-    log('Type "help" for commands');
-    log('Quick start: mode guided → arm → takeoff 10');
+    print('ArduPilot flight controller active');
+    print('Type drone.help() for commands, or any JavaScript');
+    print('Quick start: await drone.mode("guided")');
   } else {
-    log('Running in standalone physics mode (no flight controller)');
-    log('Type "help" for available commands');
+    print('Running in standalone physics mode');
   }
 });

@@ -1,30 +1,53 @@
-// Minimal MAVLink v2 encoder for browser → ArduPilot communication
+// MAVLink v2 encoder/decoder for browser ↔ ArduPilot communication
 
 const MAVLINK_STX = 0xFD;
 
 // Message IDs
-const MSG_HEARTBEAT = 0;
-const MSG_SET_MODE = 11;
-const MSG_PARAM_SET = 23;
-const MSG_COMMAND_LONG = 76;
-const MSG_SET_POSITION_TARGET_LOCAL_NED = 84;
+export const MSG_HEARTBEAT = 0;
+export const MSG_SYS_STATUS = 1;
+export const MSG_PARAM_VALUE = 22;
+export const MSG_PARAM_SET = 23;
+export const MSG_GPS_RAW_INT = 24;
+export const MSG_ATTITUDE = 30;
+export const MSG_GLOBAL_POSITION_INT = 33;
+export const MSG_LOCAL_POSITION_NED = 32;
+export const MSG_SET_MODE = 11;
+export const MSG_COMMAND_LONG = 76;
+export const MSG_COMMAND_ACK = 77;
+export const MSG_SET_POSITION_TARGET_LOCAL_NED = 84;
+export const MSG_SET_POSITION_TARGET_GLOBAL_INT = 86;
+export const MSG_STATUSTEXT = 253;
+export const MSG_HOME_POSITION = 242;
 
 // CRC extras (per-message seed for integrity check)
+const MSG_PARAM_REQUEST_READ = 20;
+const MSG_REQUEST_DATA_STREAM = 66;
+
 const CRC_EXTRA: Record<number, number> = {
   [MSG_HEARTBEAT]: 50,
+  [MSG_SYS_STATUS]: 124,
   [MSG_SET_MODE]: 89,
+  [MSG_PARAM_REQUEST_READ]: 214,
+  [MSG_PARAM_VALUE]: 220,
   [MSG_PARAM_SET]: 168,
+  [MSG_REQUEST_DATA_STREAM]: 148,
+  [MSG_GPS_RAW_INT]: 24,
+  [MSG_ATTITUDE]: 39,
+  [MSG_LOCAL_POSITION_NED]: 185,
+  [MSG_GLOBAL_POSITION_INT]: 104,
   [MSG_COMMAND_LONG]: 152,
+  [MSG_COMMAND_ACK]: 143,
   [MSG_SET_POSITION_TARGET_LOCAL_NED]: 143,
+  [MSG_SET_POSITION_TARGET_GLOBAL_INT]: 5,
+  [MSG_HOME_POSITION]: 104,
+  [MSG_STATUSTEXT]: 83,
 };
 
 // MAV_CMD values
-const MAV_CMD_COMPONENT_ARM_DISARM = 400;
-const MAV_CMD_NAV_TAKEOFF = 22;
-
-// MAV_TYPE, MAV_AUTOPILOT, MAV_MODE, MAV_STATE
-const MAV_TYPE_GCS = 6;
-const MAV_AUTOPILOT_INVALID = 8;
+export const MAV_CMD_COMPONENT_ARM_DISARM = 400;
+export const MAV_CMD_NAV_TAKEOFF = 22;
+export const MAV_CMD_DO_SET_MODE = 176;
+export const MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN = 246;
 
 // System/Component IDs
 const GCS_SYSID = 255;
@@ -33,7 +56,7 @@ const TARGET_SYSID = 1;
 const TARGET_COMPID = 1;
 
 // Copter flight modes (ArduCopter specific custom_mode values)
-const COPTER_MODES: Record<string, number> = {
+export const COPTER_MODES: Record<string, number> = {
   STABILIZE: 0,
   ACRO: 1,
   ALT_HOLD: 2,
@@ -53,6 +76,27 @@ const COPTER_MODES: Record<string, number> = {
   GUIDED_NOGPS: 20,
 };
 
+export const COPTER_MODE_NAMES = Object.keys(COPTER_MODES);
+
+const COPTER_MODE_BY_NUM: Record<number, string> = {};
+for (const [name, num] of Object.entries(COPTER_MODES)) {
+  COPTER_MODE_BY_NUM[num] = name;
+}
+export { COPTER_MODE_BY_NUM };
+
+const MAV_RESULT_NAMES: Record<number, string> = {
+  0: 'ACCEPTED',
+  1: 'TEMPORARILY_REJECTED',
+  2: 'DENIED',
+  3: 'UNSUPPORTED',
+  4: 'FAILED',
+  5: 'IN_PROGRESS',
+  6: 'CANCELLED',
+};
+
+const MAV_TYPE_GCS = 6;
+const MAV_AUTOPILOT_INVALID = 8;
+
 let seq = 0;
 
 function crc16Accumulate(byte: number, crc: number): number {
@@ -70,14 +114,14 @@ function mavlinkCrc(buf: Uint8Array, crcExtra: number): number {
   return crc;
 }
 
-function encodeFrame(msgId: number, payload: Uint8Array): Uint8Array {
+export function encodeFrame(msgId: number, payload: Uint8Array): Uint8Array {
   const frame = new Uint8Array(12 + payload.length);
   const s = seq++ & 0xff;
 
   frame[0] = MAVLINK_STX;
   frame[1] = payload.length;
-  frame[2] = 0; // incompat flags
-  frame[3] = 0; // compat flags
+  frame[2] = 0;
+  frame[3] = 0;
   frame[4] = s;
   frame[5] = GCS_SYSID;
   frame[6] = GCS_COMPID;
@@ -86,7 +130,6 @@ function encodeFrame(msgId: number, payload: Uint8Array): Uint8Array {
   frame[9] = (msgId >> 16) & 0xff;
   frame.set(payload, 10);
 
-  // CRC is computed over bytes 1..9+payload (skip STX)
   const crcBuf = frame.subarray(1, 10 + payload.length);
   const crc = mavlinkCrc(crcBuf, CRC_EXTRA[msgId] ?? 0);
   frame[10 + payload.length] = crc & 0xff;
@@ -95,52 +138,26 @@ function encodeFrame(msgId: number, payload: Uint8Array): Uint8Array {
   return frame;
 }
 
-function floatToBytes(val: number): Uint8Array {
-  const buf = new ArrayBuffer(4);
-  new DataView(buf).setFloat32(0, val, true);
-  return new Uint8Array(buf);
-}
-
-function uint32ToBytes(val: number): Uint8Array {
-  const buf = new ArrayBuffer(4);
-  new DataView(buf).setUint32(0, val, true);
-  return new Uint8Array(buf);
-}
-
-function uint16ToBytes(val: number): Uint8Array {
-  const buf = new ArrayBuffer(2);
-  new DataView(buf).setUint16(0, val, true);
-  return new Uint8Array(buf);
-}
-
 export function encodeHeartbeat(): Uint8Array {
-  // HEARTBEAT: type(u8), autopilot(u8), base_mode(u8), custom_mode(u32), system_status(u8), mavlink_version(u8)
-  // Wire order: custom_mode(u32), type(u8), autopilot(u8), base_mode(u8), system_status(u8), mavlink_version(u8)
   const payload = new Uint8Array(9);
   const dv = new DataView(payload.buffer);
-  dv.setUint32(0, 0, true); // custom_mode
+  dv.setUint32(0, 0, true);
   payload[4] = MAV_TYPE_GCS;
   payload[5] = MAV_AUTOPILOT_INVALID;
-  payload[6] = 0; // base_mode
-  payload[7] = 0; // system_status
-  payload[8] = 3; // mavlink_version
+  payload[6] = 0;
+  payload[7] = 0;
+  payload[8] = 3;
   return encodeFrame(MSG_HEARTBEAT, payload);
 }
 
 export function encodeSetMode(mode: string): Uint8Array | null {
   const customMode = COPTER_MODES[mode.toUpperCase()];
   if (customMode === undefined) return null;
-
-  // SET_MODE: custom_mode(u32), target_system(u8), base_mode(u8)
   const payload = new Uint8Array(6);
   const dv = new DataView(payload.buffer);
   dv.setUint32(0, customMode, true);
   payload[4] = TARGET_SYSID;
-  payload[5] = 1 | 128; // MAV_MODE_FLAG_CUSTOM_MODE_ENABLED | MAV_MODE_FLAG_SAFETY_ARMED ... just set 0x81
-  // Actually base_mode should be 0x81 (custom enabled) for mode switch to work
-  // 0x01 = CUSTOM_MODE, 0x80 = currently the flag for testing
-  // ArduPilot mainly checks custom_mode and ignores base_mode in SET_MODE
-  payload[5] = 0x01; // MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
+  payload[5] = 0x01;
   return encodeFrame(MSG_SET_MODE, payload);
 }
 
@@ -149,9 +166,6 @@ export function encodeCommandLong(
   param1 = 0, param2 = 0, param3 = 0, param4 = 0,
   param5 = 0, param6 = 0, param7 = 0,
 ): Uint8Array {
-  // COMMAND_LONG wire order:
-  // param1..param7 (float each = 28 bytes), command(u16), target_system(u8),
-  // target_component(u8), confirmation(u8) = total 33 bytes
   const payload = new Uint8Array(33);
   const dv = new DataView(payload.buffer);
   dv.setFloat32(0, param1, true);
@@ -164,16 +178,24 @@ export function encodeCommandLong(
   dv.setUint16(28, command, true);
   payload[30] = TARGET_SYSID;
   payload[31] = TARGET_COMPID;
-  payload[32] = 0; // confirmation
+  payload[32] = 0;
   return encodeFrame(MSG_COMMAND_LONG, payload);
 }
 
 export function encodeArm(): Uint8Array {
-  return encodeCommandLong(MAV_CMD_COMPONENT_ARM_DISARM, 1, 0, 0, 0, 0, 0, 0);
+  return encodeCommandLong(MAV_CMD_COMPONENT_ARM_DISARM, 1);
+}
+
+export function encodeForceArm(): Uint8Array {
+  return encodeCommandLong(MAV_CMD_COMPONENT_ARM_DISARM, 1, 21196);
 }
 
 export function encodeDisarm(): Uint8Array {
-  return encodeCommandLong(MAV_CMD_COMPONENT_ARM_DISARM, 0, 0, 0, 0, 0, 0, 0);
+  return encodeCommandLong(MAV_CMD_COMPONENT_ARM_DISARM, 0);
+}
+
+export function encodeForceDisarm(): Uint8Array {
+  return encodeCommandLong(MAV_CMD_COMPONENT_ARM_DISARM, 0, 21196);
 }
 
 export function encodeTakeoff(altitudeM: number): Uint8Array {
@@ -181,20 +203,12 @@ export function encodeTakeoff(altitudeM: number): Uint8Array {
 }
 
 export function encodeGotoLocalNED(north: number, east: number, down: number): Uint8Array {
-  // SET_POSITION_TARGET_LOCAL_NED wire order:
-  // time_boot_ms(u32), x(f32), y(f32), z(f32), vx(f32), vy(f32), vz(f32),
-  // afx(f32), afy(f32), afz(f32), yaw(f32), yaw_rate(f32),
-  // type_mask(u16), target_system(u8), target_component(u8), coordinate_frame(u8)
-  // = 53 bytes
   const payload = new Uint8Array(53);
   const dv = new DataView(payload.buffer);
-  dv.setUint32(0, 0, true); // time_boot_ms
-  dv.setFloat32(4, north, true); // x (north)
-  dv.setFloat32(8, east, true);  // y (east)
-  dv.setFloat32(12, down, true); // z (down, so negative = up)
-  // vx, vy, vz, afx, afy, afz, yaw, yaw_rate = 0
-  // type_mask: ignore velocity, accel, yaw, yaw_rate — only use position
-  // 0b0000_1111_1111_1000 = 0x0FF8
+  dv.setUint32(0, 0, true);
+  dv.setFloat32(4, north, true);
+  dv.setFloat32(8, east, true);
+  dv.setFloat32(12, down, true);
   dv.setUint16(48, 0x0DF8, true);
   payload[50] = TARGET_SYSID;
   payload[51] = TARGET_COMPID;
@@ -202,13 +216,21 @@ export function encodeGotoLocalNED(north: number, east: number, down: number): U
   return encodeFrame(MSG_SET_POSITION_TARGET_LOCAL_NED, payload);
 }
 
-export function encodeForceArm(): Uint8Array {
-  return encodeCommandLong(MAV_CMD_COMPONENT_ARM_DISARM, 1, 21196, 0, 0, 0, 0, 0);
+export function encodeGotoGlobalInt(lat: number, lon: number, alt: number): Uint8Array {
+  const payload = new Uint8Array(53);
+  const dv = new DataView(payload.buffer);
+  dv.setUint32(0, 0, true); // time_boot_ms
+  dv.setInt32(4, Math.round(lat * 1e7), true);
+  dv.setInt32(8, Math.round(lon * 1e7), true);
+  dv.setFloat32(12, alt, true);
+  dv.setUint16(48, 0x0DF8, true);
+  payload[50] = TARGET_SYSID;
+  payload[51] = TARGET_COMPID;
+  payload[52] = 6; // MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+  return encodeFrame(MSG_SET_POSITION_TARGET_GLOBAL_INT, payload);
 }
 
 export function encodeParamSet(paramId: string, value: number): Uint8Array {
-  // PARAM_SET wire order: param_value(f32), target_system(u8), target_component(u8),
-  // param_id(char[16]), param_type(u8) = 23 bytes
   const payload = new Uint8Array(23);
   const dv = new DataView(payload.buffer);
   dv.setFloat32(0, value, true);
@@ -221,29 +243,11 @@ export function encodeParamSet(paramId: string, value: number): Uint8Array {
   return encodeFrame(MSG_PARAM_SET, payload);
 }
 
-export const COPTER_MODE_NAMES = Object.keys(COPTER_MODES);
-
-// Reverse lookup: custom_mode number → name
-const COPTER_MODE_BY_NUM: Record<number, string> = {};
-for (const [name, num] of Object.entries(COPTER_MODES)) {
-  COPTER_MODE_BY_NUM[num] = name;
-}
-
-// Additional message IDs for parsing responses
-const MSG_COMMAND_ACK = 77;
-const MSG_STATUSTEXT = 253;
-const MSG_SYS_STATUS = 1;
-
-// CRC extras for messages we want to parse
-const CRC_EXTRA_PARSE: Record<number, number> = {
-  [MSG_HEARTBEAT]: 50,
-  [MSG_COMMAND_ACK]: 143,
-  [MSG_STATUSTEXT]: 83,
-  [MSG_SYS_STATUS]: 124,
-};
+// --- Parsed message types ---
 
 export interface ParsedHeartbeat {
-  type: 'heartbeat';
+  type: 'HEARTBEAT';
+  msgId: 0;
   vehicleType: number;
   customMode: number;
   modeName: string;
@@ -252,35 +256,105 @@ export interface ParsedHeartbeat {
 }
 
 export interface ParsedCommandAck {
-  type: 'command_ack';
+  type: 'COMMAND_ACK';
+  msgId: 77;
   command: number;
   result: number;
   resultText: string;
 }
 
 export interface ParsedStatusText {
-  type: 'statustext';
+  type: 'STATUSTEXT';
+  msgId: 253;
   severity: number;
   text: string;
 }
 
-export type ParsedMessage = ParsedHeartbeat | ParsedCommandAck | ParsedStatusText;
+export interface ParsedSysStatus {
+  type: 'SYS_STATUS';
+  msgId: 1;
+  voltageBattery: number;
+  currentBattery: number;
+  batteryRemaining: number;
+}
 
-const MAV_RESULT_NAMES: Record<number, string> = {
-  0: 'ACCEPTED',
-  1: 'TEMPORARILY_REJECTED',
-  2: 'DENIED',
-  3: 'UNSUPPORTED',
-  4: 'FAILED',
-  5: 'IN_PROGRESS',
-  6: 'CANCELLED',
-};
+export interface ParsedGpsRawInt {
+  type: 'GPS_RAW_INT';
+  msgId: 24;
+  fixType: number;
+  lat: number;
+  lon: number;
+  alt: number;
+  eph: number;
+  epv: number;
+  satellitesVisible: number;
+}
+
+export interface ParsedAttitude {
+  type: 'ATTITUDE';
+  msgId: 30;
+  roll: number;
+  pitch: number;
+  yaw: number;
+  rollspeed: number;
+  pitchspeed: number;
+  yawspeed: number;
+}
+
+export interface ParsedLocalPositionNed {
+  type: 'LOCAL_POSITION_NED';
+  msgId: 32;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+}
+
+export interface ParsedGlobalPositionInt {
+  type: 'GLOBAL_POSITION_INT';
+  msgId: 33;
+  lat: number;
+  lon: number;
+  alt: number;
+  relativeAlt: number;
+  heading: number;
+}
+
+export interface ParsedParamValue {
+  type: 'PARAM_VALUE';
+  msgId: 22;
+  paramId: string;
+  paramValue: number;
+  paramCount: number;
+  paramIndex: number;
+}
+
+export interface ParsedHomePosition {
+  type: 'HOME_POSITION';
+  msgId: 242;
+  lat: number;
+  lon: number;
+  alt: number;
+}
+
+export type ParsedMessage =
+  | ParsedHeartbeat
+  | ParsedCommandAck
+  | ParsedStatusText
+  | ParsedSysStatus
+  | ParsedGpsRawInt
+  | ParsedAttitude
+  | ParsedLocalPositionNed
+  | ParsedGlobalPositionInt
+  | ParsedParamValue
+  | ParsedHomePosition;
 
 export class MavlinkParser {
   private buf = new Uint8Array(0);
 
   feed(data: Uint8Array): ParsedMessage[] {
-    // Append new data to buffer
     const combined = new Uint8Array(this.buf.length + data.length);
     combined.set(this.buf);
     combined.set(data, this.buf.length);
@@ -289,7 +363,6 @@ export class MavlinkParser {
     const messages: ParsedMessage[] = [];
 
     while (this.buf.length >= 12) {
-      // Find STX
       const stxIdx = this.buf.indexOf(MAVLINK_STX);
       if (stxIdx === -1) {
         this.buf = new Uint8Array(0);
@@ -308,27 +381,23 @@ export class MavlinkParser {
       const msgId = this.buf[7] | (this.buf[8] << 8) | (this.buf[9] << 16);
       const payload = this.buf.slice(10, 10 + payloadLen);
 
-      // Verify CRC if we know the CRC extra
-      const crcExtra = CRC_EXTRA_PARSE[msgId] ?? CRC_EXTRA[msgId];
+      const crcExtra = CRC_EXTRA[msgId];
       if (crcExtra !== undefined) {
         const crcBuf = this.buf.slice(1, 10 + payloadLen);
         const computed = mavlinkCrc(crcBuf, crcExtra);
         const received = this.buf[10 + payloadLen] | (this.buf[10 + payloadLen + 1] << 8);
         if (computed !== received) {
-          // Bad CRC, skip this byte and try again
           this.buf = this.buf.slice(1);
           continue;
         }
       }
 
-      // Parse known messages
       const parsed = this.parsePayload(msgId, payload);
       if (parsed) messages.push(parsed);
 
       this.buf = this.buf.slice(frameLen);
     }
 
-    // Trim buffer if it's getting too large (prevent memory leak from garbage data)
     if (this.buf.length > 4096) {
       this.buf = this.buf.slice(this.buf.length - 1024);
     }
@@ -346,7 +415,8 @@ export class MavlinkParser {
         const vehicleType = payload[4];
         const baseMode = payload[6];
         return {
-          type: 'heartbeat',
+          type: 'HEARTBEAT',
+          msgId: 0,
           vehicleType,
           customMode,
           modeName: COPTER_MODE_BY_NUM[customMode] ?? `UNKNOWN(${customMode})`,
@@ -359,7 +429,8 @@ export class MavlinkParser {
         const command = dv.getUint16(0, true);
         const result = payload[2];
         return {
-          type: 'command_ack',
+          type: 'COMMAND_ACK',
+          msgId: 77,
           command,
           result,
           resultText: MAV_RESULT_NAMES[result] ?? `UNKNOWN(${result})`,
@@ -371,7 +442,93 @@ export class MavlinkParser {
         const textBytes = payload.slice(1, 51);
         const nullIdx = textBytes.indexOf(0);
         const text = new TextDecoder().decode(nullIdx >= 0 ? textBytes.slice(0, nullIdx) : textBytes);
-        return { type: 'statustext', severity, text };
+        return { type: 'STATUSTEXT', msgId: 253, severity, text };
+      }
+      case MSG_SYS_STATUS: {
+        if (payload.length < 31) return null;
+        return {
+          type: 'SYS_STATUS',
+          msgId: 1,
+          voltageBattery: dv.getUint16(14, true) / 1000.0,
+          currentBattery: dv.getInt16(16, true) / 100.0,
+          batteryRemaining: dv.getInt8(30),
+        };
+      }
+      case MSG_GPS_RAW_INT: {
+        if (payload.length < 30) return null;
+        return {
+          type: 'GPS_RAW_INT',
+          msgId: 24,
+          fixType: payload[28],
+          lat: dv.getInt32(8, true) / 1e7,
+          lon: dv.getInt32(12, true) / 1e7,
+          alt: dv.getInt32(16, true) / 1e3,
+          eph: dv.getUint16(20, true),
+          epv: dv.getUint16(22, true),
+          satellitesVisible: payload[29],
+        };
+      }
+      case MSG_ATTITUDE: {
+        if (payload.length < 28) return null;
+        return {
+          type: 'ATTITUDE',
+          msgId: 30,
+          roll: dv.getFloat32(4, true),
+          pitch: dv.getFloat32(8, true),
+          yaw: dv.getFloat32(12, true),
+          rollspeed: dv.getFloat32(16, true),
+          pitchspeed: dv.getFloat32(20, true),
+          yawspeed: dv.getFloat32(24, true),
+        };
+      }
+      case MSG_LOCAL_POSITION_NED: {
+        if (payload.length < 28) return null;
+        return {
+          type: 'LOCAL_POSITION_NED',
+          msgId: 32,
+          x: dv.getFloat32(4, true),
+          y: dv.getFloat32(8, true),
+          z: dv.getFloat32(12, true),
+          vx: dv.getFloat32(16, true),
+          vy: dv.getFloat32(20, true),
+          vz: dv.getFloat32(24, true),
+        };
+      }
+      case MSG_GLOBAL_POSITION_INT: {
+        if (payload.length < 28) return null;
+        return {
+          type: 'GLOBAL_POSITION_INT',
+          msgId: 33,
+          lat: dv.getInt32(4, true) / 1e7,
+          lon: dv.getInt32(8, true) / 1e7,
+          alt: dv.getInt32(12, true) / 1e3,
+          relativeAlt: dv.getInt32(16, true) / 1e3,
+          heading: dv.getUint16(26, true) / 100,
+        };
+      }
+      case MSG_PARAM_VALUE: {
+        if (payload.length < 25) return null;
+        const idBytes = payload.slice(4, 20);
+        const nullIdx = idBytes.indexOf(0);
+        const paramId = new TextDecoder().decode(nullIdx >= 0 ? idBytes.slice(0, nullIdx) : idBytes);
+        return {
+          type: 'PARAM_VALUE',
+          msgId: 22,
+          paramValue: dv.getFloat32(0, true),
+          paramCount: dv.getUint16(20, true),
+          paramIndex: dv.getUint16(22, true),
+          paramId,
+        };
+      }
+      case MSG_HOME_POSITION: {
+        if (payload.length < 52) return null;
+        return {
+          type: 'HOME_POSITION',
+          msgId: 242,
+          lat: dv.getInt32(0, true) / 1e7,
+          lon: dv.getInt32(4, true) / 1e7,
+          alt: dv.getInt32(8, true) / 1e3,
+        };
       }
       default:
         return null;

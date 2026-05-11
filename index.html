@@ -30,17 +30,19 @@
       bottom: 12px;
       left: 12px;
       right: 12px;
-      max-width: 500px;
+      max-width: 600px;
     }
     #cmd-log {
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.75);
       color: #ccc;
       padding: 8px 10px;
       border-radius: 6px 6px 0 0;
       font-size: 12px;
-      max-height: 140px;
+      max-height: 200px;
       overflow-y: auto;
-      line-height: 1.4;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     #cmd-input {
       width: 100%;
@@ -53,6 +55,10 @@
       font-size: 13px;
       border-radius: 0 0 6px 6px;
       outline: none;
+      resize: none;
+      min-height: 28px;
+      max-height: 120px;
+      overflow-y: auto;
     }
     #cmd-input:focus { border-color: #0f0; }
     #cmd-input::placeholder { color: #555; }
@@ -63,7 +69,7 @@
   <div id="hud"></div>
   <div id="cmd-panel">
     <div id="cmd-log"></div>
-    <input id="cmd-input" type="text" placeholder="Type command (e.g., arm throttle, hover, help)" autofocus>
+    <textarea id="cmd-input" rows="1" placeholder='await drone.arm()  |  drone.help()  |  any JavaScript' autofocus></textarea>
   </div>
   <script src="/ardupilot.js"></script>
   <script type="module" src="/src/main.ts"></script>

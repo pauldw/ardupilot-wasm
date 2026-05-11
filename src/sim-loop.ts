@@ -7,7 +7,7 @@ import { DroneModel } from './visualizer/drone-model';
 import { CameraController } from './visualizer/camera';
 import { HUD } from './visualizer/hud';
 import { ArduPilotBridge } from './wasm/ardupilot-bridge';
-import { encodeHeartbeat, MavlinkParser } from './mavlink/mavlink';
+import { encodeHeartbeat, encodeFrame, MavlinkParser } from './mavlink/mavlink';
 import type { ParsedMessage } from './mavlink/mavlink';
 
 export class SimLoop {
@@ -77,6 +77,25 @@ export class SimLoop {
         }
       }, 1000);
 
+      // Request data streams from ArduPilot
+      // REQUEST_DATA_STREAM (msg 66): req_message_rate(u16), target_sys(u8), target_comp(u8), req_stream_id(u8), start_stop(u8)
+      const requestStream = (streamId: number, rateHz: number) => {
+        const payload = new Uint8Array(6);
+        const dv = new DataView(payload.buffer);
+        dv.setUint16(0, rateHz, true);
+        payload[2] = 1; // target_system
+        payload[3] = 1; // target_component
+        payload[4] = streamId;
+        payload[5] = 1; // start
+        this.bridge!.sendMavlink(encodeFrame(66, payload));
+      };
+      setTimeout(() => {
+        requestStream(6, 4);   // POSITION (LOCAL_POSITION_NED, GLOBAL_POSITION_INT)
+        requestStream(10, 4);  // EXTRA1 (ATTITUDE)
+        requestStream(2, 2);   // EXTENDED_STATUS (SYS_STATUS, GPS_RAW_INT)
+        requestStream(1, 2);   // RAW_SENSORS
+      }, 2000);
+
       // Poll for MAVLink responses from ArduPilot
       setInterval(() => {
         if (this.bridge) {
@@ -101,23 +120,30 @@ export class SimLoop {
     }
   }
 
+  private messageListeners: ((msg: ParsedMessage) => void)[] = [];
+
+  addMessageListener(cb: (msg: ParsedMessage) => void): () => void {
+    this.messageListeners.push(cb);
+    return () => {
+      this.messageListeners = this.messageListeners.filter(l => l !== cb);
+    };
+  }
+
   set onMavlinkMessage(cb: (msg: ParsedMessage) => void) {
     this.onMessage = cb;
   }
 
   private handleParsedMessage(msg: ParsedMessage): void {
     switch (msg.type) {
-      case 'heartbeat':
-        if (msg.vehicleType !== 6) { // Skip MAV_TYPE_GCS
+      case 'HEARTBEAT':
+        if (msg.vehicleType !== 6) {
           this.mode = msg.modeName;
           this.armed = msg.armed;
         }
         break;
-      case 'command_ack':
-      case 'statustext':
-        break;
     }
     if (this.onMessage) this.onMessage(msg);
+    for (const cb of this.messageListeners) cb(msg);
   }
 
   sendMavlink(data: Uint8Array): void {
