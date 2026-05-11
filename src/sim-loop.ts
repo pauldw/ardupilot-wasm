@@ -58,9 +58,6 @@ export class SimLoop {
     this.body.collisionCheck = (north, east, down) =>
       this.scene.environment.checkCollision(north, east, down);
 
-    // Connect terrain to shadow projection
-    this.drone.terrainHeightAt = (worldX, worldZ) =>
-      this.scene.terrain.getHeightAtWorld(worldX, worldZ);
   }
 
   async initPhysics(onLog?: (msg: string) => void): Promise<void> {
