@@ -18,6 +18,7 @@ export class SimLoop {
   wind: Wind;
   simTime = 0;
 
+  get terrain() { return this.scene.terrain; }
   private scene: ReturnType<typeof createScene>;
   private drone: DroneModel;
   private cameraCtrl: CameraController;
@@ -27,6 +28,7 @@ export class SimLoop {
   private mode = 'STABILIZE';
   private armed = false;
   private running = true;
+  private physicsPaused = false;
 
   private bridge: ArduPilotBridge | null = null;
   private wasmMode = false;
@@ -224,51 +226,12 @@ export class SimLoop {
     velocity: number[];
   } {
     const [roll, pitch, yaw] = quatToEuler(this.body.quaternion);
-    const R = this.body.rotationMatrix;
-
-    const { force } = this.motors.getForcesAndTorques();
-    const windVel = this.wind.getVelocity(this.simTime);
-
-    const forceWorld = [
-      R[0][0] * force[0] + R[0][1] * force[1] + R[0][2] * force[2],
-      R[1][0] * force[0] + R[1][1] * force[1] + R[1][2] * force[2],
-      R[2][0] * force[0] + R[2][1] * force[1] + R[2][2] * force[2],
-    ];
-    const airspeed = [
-      this.body.velocity[0] - windVel[0],
-      this.body.velocity[1] - windVel[1],
-      this.body.velocity[2] - windVel[2],
-    ];
-    const aWorld = [
-      forceWorld[0] / this.body.mass - C.LINEAR_DRAG_COEFF * airspeed[0] / this.body.mass,
-      forceWorld[1] / this.body.mass - C.LINEAR_DRAG_COEFF * airspeed[1] / this.body.mass,
-      forceWorld[2] / this.body.mass + C.GRAVITY - C.LINEAR_DRAG_COEFF * airspeed[2] / this.body.mass,
-    ];
-
-    const groundH = this.body.groundHeightNED
-      ? this.body.groundHeightNED(this.body.position[0], this.body.position[1])
-      : 0;
-    if (this.body.position[2] >= groundH && aWorld[2] > 0) {
-      aWorld[2] = 0;
-    }
-
-    const specWorld = [aWorld[0], aWorld[1], aWorld[2] - C.GRAVITY];
-    const Rt = [
-      [R[0][0], R[1][0], R[2][0]],
-      [R[0][1], R[1][1], R[2][1]],
-      [R[0][2], R[1][2], R[2][2]],
-    ];
-    const accelBody = [
-      Rt[0][0] * specWorld[0] + Rt[0][1] * specWorld[1] + Rt[0][2] * specWorld[2],
-      Rt[1][0] * specWorld[0] + Rt[1][1] * specWorld[1] + Rt[1][2] * specWorld[2],
-      Rt[2][0] * specWorld[0] + Rt[2][1] * specWorld[1] + Rt[2][2] * specWorld[2],
-    ];
 
     return {
       timestamp: this.simTime,
       imu: {
-        gyro: [...this.body.omegaBody],
-        accel_body: accelBody,
+        gyro: this.body.sensorGyro,
+        accel_body: this.body.sensorAccel,
       },
       position: [...this.body.position],
       attitude: [roll, pitch, yaw],
@@ -311,6 +274,7 @@ export class SimLoop {
       simTime: this.simTime,
     });
 
+    this.scene.sky.position.copy(this.scene.camera.position);
     this.scene.renderer.render(this.scene.scene, this.scene.camera);
   }
 
@@ -319,7 +283,7 @@ export class SimLoop {
       if (!this.running) return;
       requestAnimationFrame(animate);
 
-      if (!this.wasmMode) {
+      if (!this.wasmMode && !this.physicsPaused) {
         for (let i = 0; i < C.STEPS_PER_FRAME; i++) {
           this.step(C.PHYSICS_DT);
         }
@@ -328,6 +292,10 @@ export class SimLoop {
       this.render();
     };
     animate();
+  }
+
+  pausePhysics(): void {
+    this.physicsPaused = true;
   }
 
   stop(): void {

@@ -1,7 +1,7 @@
 import * as C from './config';
 import { quatToRotationMatrix, quatToEuler } from './rigid-body';
 
-const MAX_TERRAIN_HEIGHT = 8;
+const MAX_TERRAIN_HEIGHT = 80;
 
 export class MuJoCoBody {
   position: number[] = [0, 0, 0];
@@ -45,7 +45,6 @@ export class MuJoCoBody {
       this.setHeightfieldData(terrainInfo);
     }
 
-    // Initial position: body frame origin at bottom of drone, on ground
     this.data.qpos[0] = 0;
     this.data.qpos[1] = 0;
     this.data.qpos[2] = 0;
@@ -304,6 +303,41 @@ export class MuJoCoBody {
     this.omegaBody[0] = mjOmegaBody[0];
     this.omegaBody[1] = -mjOmegaBody[1];
     this.omegaBody[2] = -mjOmegaBody[2];
+  }
+
+  get sensorGyro(): number[] {
+    if (!this.initialized) return [0, 0, 0];
+    // MuJoCo gyro sensor is first (3 values), in MuJoCo body frame
+    // Convert MJ body → NED body: [p, -q, -r]
+    return [this.data.sensordata[0], -this.data.sensordata[1], -this.data.sensordata[2]];
+  }
+
+  get sensorAccel(): number[] {
+    if (!this.initialized) return [0, 0, -C.GRAVITY];
+    // MuJoCo accelerometer is second sensor (3 values starting at index 3)
+    // MuJoCo accel measures specific force (contact + thrust - gravity) in sensor frame
+    // Convert MJ body → NED body: [ax, -ay, -az]
+    return [this.data.sensordata[3], -this.data.sensordata[4], -this.data.sensordata[5]];
+  }
+
+  resetToLevel(): void {
+    if (!this.initialized) return;
+    this.data.qpos[0] = 0;
+    this.data.qpos[1] = 0;
+    this.data.qpos[2] = 0.05;
+    this.data.qpos[3] = 1;
+    this.data.qpos[4] = 0;
+    this.data.qpos[5] = 0;
+    this.data.qpos[6] = 0;
+    for (let i = 0; i < 6; i++) this.data.qvel[i] = 0;
+    // Let MuJoCo settle the drone onto the ground naturally
+    for (let i = 0; i < 500; i++) {
+      this.mj.mj_step(this.model, this.data);
+    }
+    // Zero out any residual velocity from the settle
+    for (let i = 0; i < 6; i++) this.data.qvel[i] = 0;
+    this.mj.mj_forward(this.model, this.data);
+    this.readState();
   }
 
   get altitude(): number {

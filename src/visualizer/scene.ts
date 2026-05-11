@@ -8,15 +8,16 @@ export function createScene(): {
   renderer: THREE.WebGLRenderer;
   terrain: Terrain;
   environment: Environment;
+  sky: THREE.Mesh;
 } {
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
+  scene.fog = new THREE.Fog(0x87ceeb, 200, 2500);
 
   const camera = new THREE.PerspectiveCamera(
     60,
     window.innerWidth / window.innerHeight,
     0.1,
-    500
+    5000
   );
   camera.position.set(-3, 2, 3);
   camera.lookAt(0, 0, 0);
@@ -45,7 +46,7 @@ export function createScene(): {
   const loader = new THREE.TextureLoader();
   const skyTex = loader.load('/textures/sky_panorama.jpg');
   skyTex.mapping = THREE.EquirectangularReflectionMapping;
-  const skyGeo = new THREE.SphereGeometry(300, 32, 16);
+  const skyGeo = new THREE.SphereGeometry(4000, 32, 16);
   const skyMat = new THREE.MeshBasicMaterial({
     map: skyTex,
     side: THREE.BackSide,
@@ -53,16 +54,8 @@ export function createScene(): {
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
 
-  // Terrain with heightmap — three tileable textures blended to hide repetition
-  const grassTex1 = loader.load('/textures/ground_grass.jpg');
-  grassTex1.wrapS = grassTex1.wrapT = THREE.RepeatWrapping;
-  const grassTex2 = loader.load('/textures/grass_color.jpg');
-  grassTex2.wrapS = grassTex2.wrapT = THREE.RepeatWrapping;
-  const groundTex = loader.load('/textures/ground_color.jpg');
-  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-  const terrain = new Terrain(scene, grassTex1, grassTex2, groundTex);
-
-  // Environment objects (trees, rocks, etc.)
+  const terrain = new Terrain(scene);
+  terrain.setRenderer(renderer);
   const environment = new Environment(scene, terrain);
 
   // Resize handler
@@ -72,5 +65,5 @@ export function createScene(): {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, camera, renderer, terrain, environment };
+  return { scene, camera, renderer, terrain, environment, sky };
 }
