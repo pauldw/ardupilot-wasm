@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArduPilot WASM Simulator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; font-family: 'Courier New', monospace; background: #000; }
+    #canvas-container { width: 100vw; height: 100vh; }
+    #canvas-container canvas { display: block; }
+
+    #hud {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #0f0;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.6;
+      min-width: 220px;
+      pointer-events: none;
+    }
+    .hud-row span { color: #8f8; font-weight: bold; }
+
+    #cmd-panel {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      max-width: 500px;
+    }
+    #cmd-log {
+      background: rgba(0, 0, 0, 0.7);
+      color: #ccc;
+      padding: 8px 10px;
+      border-radius: 6px 6px 0 0;
+      font-size: 12px;
+      max-height: 140px;
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+    #cmd-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      color: #0f0;
+      border: 1px solid #333;
+      border-top: none;
+      padding: 8px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      border-radius: 0 0 6px 6px;
+      outline: none;
+    }
+    #cmd-input:focus { border-color: #0f0; }
+    #cmd-input::placeholder { color: #555; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="hud"></div>
+  <div id="cmd-panel">
+    <div id="cmd-log"></div>
+    <input id="cmd-input" type="text" placeholder="Type command (e.g., arm throttle, hover, help)" autofocus>
+  </div>
+  <script src="/ardupilot.js"></script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

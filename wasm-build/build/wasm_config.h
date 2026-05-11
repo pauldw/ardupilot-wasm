@@ -1,0 +1,114 @@
+#pragma once
+
+// WASM build configuration for ArduPilot SITL
+// This header is force-included before all ArduPilot sources
+
+// Board identification - reuse SITL board ID to minimize #if changes
+#define CONFIG_HAL_BOARD HAL_BOARD_SITL
+#define CONFIG_HAL_BOARD_SUBTYPE HAL_BOARD_SUBTYPE_NONE
+
+// Mark this as a WASM build so we can #ifdef specific changes
+#define AP_WASM_BUILD 1
+
+// Vehicle type - ArduCopter
+#define APM_BUILD_DIRECTORY APM_BUILD_ArduCopter
+#define SKETCH_MAIN ArduCopter_main
+#define AP_BUILD_TARGET_NAME "ArduCopter"
+#define AP_BUILD_ROOT "/tmp/ardupilot-wasm"
+
+// Emscripten doesn't have all POSIX features
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
+// Disable features we don't need for browser SITL
+#define HAL_LOGGING_ENABLED 0
+#define AP_SCRIPTING_ENABLED 0
+#define HAL_NUM_CAN_IFACES 0
+#define AP_CAMERA_ENABLED 0
+#define AP_ADSB_ENABLED 0
+#define AP_SIM_ADSB_ENABLED 0
+#define AP_SIM_ADSB_SAGETECH_MXS_ENABLED 0
+#define AP_AVOIDANCE_ENABLED 0
+#define AP_OAPATHPLANNER_ENABLED 0
+#define AP_TERRAIN_AVAILABLE 0
+#define AP_FENCE_ENABLED 0
+#define AP_RALLY_ENABLED 0
+#define AP_MISSION_ENABLED 1
+#define AP_DEVO_TELEM_ENABLED 0
+#define HAL_SPRAYER_ENABLED 0
+#define AP_LANDINGGEAR_ENABLED 0
+#define AP_GRIPPER_ENABLED 0
+#define AP_WINCH_ENABLED 0
+#define HAL_MOUNT_ENABLED 0
+#define AP_OPTICALFLOW_ENABLED 0
+#define AP_RPM_ENABLED 0
+#define AP_BEACON_ENABLED 0
+#define HAL_PROXIMITY_ENABLED 0
+#define AP_RANGEFINDER_ENABLED 1
+#define AP_BUTTON_ENABLED 0
+#define AP_RELAY_ENABLED 0
+#define AP_SERVORELAYEVENTS_ENABLED 0
+#define AP_RC_CHANNEL_AUX_FUNCTION_STRINGS_ENABLED 0
+#define HAL_GENERATOR_ENABLED 0
+#define AP_NOTIFY_ENABLED 0
+#define HAL_DISPLAY_ENABLED 0
+#define AP_SMARTAUDIO_ENABLED 0
+#define AP_TRAMP_ENABLED 0
+#define AP_BATTERY_ENABLED 1
+#define AP_BATTERY_BACKEND_DEFAULT_ENABLED 0
+#define AP_BATTERY_ANALOG_ENABLED 1
+#define AP_GPS_ENABLED 1
+#define AP_COMPASS_ENABLED 1
+#define AP_BARO_ENABLED 1
+#define AP_AIRSPEED_ENABLED 0
+#define AP_EFI_ENABLED 0
+#define HAL_VISUALODOM_ENABLED 0
+#define AP_NETWORKING_ENABLED 0
+#define HAL_WITH_ESC_TELEM 0
+#define AP_ICENGINE_ENABLED 0
+#define AP_PRECLAND_ENABLED 0
+#define AP_TORQEEDO_ENABLED 0
+#define AP_STATS_ENABLED 0
+#define AP_TEMPERATURE_SENSOR_ENABLED 0
+#define AP_KDECAN_ENABLED 0
+#define AP_CHECK_FIRMWARE_ENABLED 0
+#define AP_FILESYSTEM_FORMAT_ENABLED 0
+#define AP_SIM_SOLOGIMBAL_ENABLED 0
+#define AP_SIM_VICON_ENABLED 0
+#define AP_SIM_AIS_ENABLED 0
+#define AP_SIM_JSON_MASTER_ENABLED 0
+#define AP_SIM_GPS_ENABLED 1
+#define AP_RCPROTOCOL_ENABLED 0
+#define AP_DDS_ENABLED 0
+#define HAL_PICCOLO_CAN_ENABLE 0
+#define AP_CUSTOMROTATIONS_ENABLED 0
+#define AP_SIM_PS_LD06_ENABLED 0
+#define AP_SIM_PS_RPLIDARA2_ENABLED 0
+#define AP_SIM_PS_RPLIDARA1_ENABLED 0
+#define AP_SIM_PS_RPLIDARS2_ENABLED 0
+#define AP_SIM_PS_LIGHTWARE_SF45B_ENABLED 0
+#define AP_SIM_PS_TERARANGERTOWER_ENABLED 0
+#define AP_SIM_CRSF_ENABLED 0
+#define AP_SIM_ELRS_ENABLED 0
+#define AP_SIM_ENABLED 1
+#define AP_SIM_SHIP_ENABLED 0
+#define AP_SIM_SLUNGPAYLOAD_ENABLED 0
+#define AP_EXTERNAL_CONTROL_ENABLED 0
+#define AP_EXTERNAL_AHRS_ENABLED 0
+
+// Simplify threading model
+#define AP_SCHEDULER_ENABLED 1
+
+// Enable minimal MAVLink
+#define HAL_GCS_ENABLED 1
+#define HAL_HIGHRES_IMU_ENABLED 0
+
+// Disable dangerous POSIX features
+#define HAL_OS_SOCKETS 0
+
+// WASM doesn't have feenableexcept
+#define AP_WASM_NO_FP_EXCEPTIONS 1
+
+// Double precision for SITL
+#define AP_SIM_DOUBLE_PRECISION 1

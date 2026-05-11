@@ -1,0 +1,24 @@
+// Generated config for WASM SITL build
+#ifndef _AP_CONFIG_H_
+#define _AP_CONFIG_H_
+
+#define __STDC_FORMAT_MACROS 1
+#define AP_SIM_ENABLED 1
+#define HAL_WITH_SPI 1
+#define HAL_WITH_RAMTRON 0
+#define AP_OPENDRONEID_ENABLED 0
+#define AP_SIGNED_FIRMWARE 0
+#define HAL_NUM_CAN_IFACES 0
+/* #undef HAVE_FEENABLEEXCEPT */
+#define HAVE_CMATH_ISFINITE 1
+#define HAVE_CMATH_ISINF 1
+#define HAVE_CMATH_ISNAN 1
+#define NEED_CMATH_ISFINITE_STD_NAMESPACE 1
+#define NEED_CMATH_ISINF_STD_NAMESPACE 1
+#define NEED_CMATH_ISNAN_STD_NAMESPACE 1
+/* #undef HAVE_ENDIAN_H */
+/* #undef HAVE_BYTESWAP_H */
+/* #undef HAVE_MEMRCHR */
+#define _GNU_SOURCE 1
+
+#endif /* _AP_CONFIG_H_ */

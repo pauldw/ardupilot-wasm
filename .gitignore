@@ -1,0 +1,7 @@
+node_modules/
+dist/
+wasm-build/output/
+*.o
+*.err
+test-wasm*.cjs
+test-wasm*.mjs
