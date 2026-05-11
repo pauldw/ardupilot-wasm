@@ -8,6 +8,7 @@ import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@cod
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import type { Drone } from '../drone';
 import type { SimLoop } from '../sim-loop';
+import type { World } from '../world';
 
 const DRONE_COMPLETIONS: Completion[] = [
   { label: 'drone.arm()', type: 'method', detail: 'Arm motors', boost: 10 },
@@ -34,11 +35,20 @@ const DRONE_COMPLETIONS: Completion[] = [
   { label: 'drone.help()', type: 'method', detail: 'Show help' },
 ];
 
+const WORLD_COMPLETIONS: Completion[] = [
+  { label: 'world.wind_set(speed, dir)', type: 'method', detail: 'Set wind speed & direction', boost: 10 },
+  { label: 'world.wind_set(speed, dir, gust, variation)', type: 'method', detail: 'Full wind config' },
+  { label: 'world.wind_get()', type: 'method', detail: 'Get current wind settings', boost: 9 },
+  { label: 'world.wind_off()', type: 'method', detail: 'Disable wind', boost: 8 },
+  { label: 'world.help()', type: 'method', detail: 'Show help' },
+];
+
 const GLOBAL_COMPLETIONS: Completion[] = [
   { label: 'await', type: 'keyword', boost: 5 },
   { label: 'sleep(ms)', type: 'function', detail: 'Wait N milliseconds', boost: 4 },
   { label: 'print(msg)', type: 'function', detail: 'Print to console', boost: 3 },
   { label: 'drone', type: 'variable', detail: 'Drone API', boost: 6 },
+  { label: 'world', type: 'variable', detail: 'World/environment API', boost: 5 },
   { label: 'sim', type: 'variable', detail: 'SimLoop instance' },
 ];
 
@@ -59,11 +69,23 @@ function droneCompletions(context: CompletionContext) {
     };
   }
 
+  if (text.startsWith('world.')) {
+    const prefix = text.slice(6);
+    return {
+      from: word.from,
+      options: WORLD_COMPLETIONS.filter(c => {
+        const method = c.label.slice(6);
+        return method.startsWith(prefix);
+      }),
+    };
+  }
+
   return {
     from: word.from,
     options: [
       ...GLOBAL_COMPLETIONS.filter(c => c.label.startsWith(text)),
       ...DRONE_COMPLETIONS.filter(c => c.label.startsWith(text)),
+      ...WORLD_COMPLETIONS.filter(c => c.label.startsWith(text)),
     ],
   };
 }
@@ -121,6 +143,7 @@ export class ProgramEditor {
   private abortController: AbortController | null = null;
   private drone: Drone | null = null;
   private sim: SimLoop | null = null;
+  private world: World | null = null;
   private printFn: (msg: string) => void;
   private collapsed = false;
   private editorWrap: HTMLElement;
@@ -197,9 +220,10 @@ export class ProgramEditor {
     });
   }
 
-  bind(drone: Drone, sim: SimLoop): void {
+  bind(drone: Drone, sim: SimLoop, world: World): void {
     this.drone = drone;
     this.sim = sim;
+    this.world = world;
   }
 
   private toggleCollapse(btn: HTMLElement): void {
@@ -222,6 +246,7 @@ export class ProgramEditor {
     const signal = this.abortController.signal;
     const drone = this.drone;
     const sim = this.sim;
+    const world = this.world;
     const print = this.printFn;
 
     const sleep = (ms: number) => new Promise<void>((resolve, reject) => {
@@ -233,10 +258,10 @@ export class ProgramEditor {
     this.printFn('─── Program started ───');
 
     try {
-      const fn = new Function('drone', 'sim', 'print', 'sleep', 'signal',
+      const fn = new Function('drone', 'sim', 'world', 'print', 'sleep', 'signal',
         `return (async () => { ${code} })()`
       );
-      await fn(drone, sim, print, sleep, signal);
+      await fn(drone, sim, world, print, sleep, signal);
       this.printFn('─── Program finished ───');
       this.statusEl.textContent = 'Done';
       this.statusEl.className = 'done';

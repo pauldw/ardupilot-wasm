@@ -1,5 +1,6 @@
 import { SimLoop } from './sim-loop';
 import { Drone } from './drone';
+import { World } from './world';
 import { ProgramEditor } from './visualizer/editor';
 
 const sim = new SimLoop();
@@ -25,11 +26,13 @@ function printHtml(html: string): void {
 }
 
 const drone = new Drone(sim, print);
+const world = new World(sim, print);
 const editor = new ProgramEditor(document.getElementById('cmd-panel')!, print);
-editor.bind(drone, sim);
+editor.bind(drone, sim, world);
 
 // Expose drone and mavlink utilities on window for advanced usage
 (window as any).drone = drone;
+(window as any).world = world;
 (window as any).sim = sim;
 
 sim.onMavlinkMessage = (msg) => {
@@ -43,10 +46,10 @@ async function evalCommand(code: string): Promise<void> {
 
   try {
     // Wrap in async function so `await` works at top level
-    const asyncFn = new Function('drone', 'sim', 'print', 'sleep',
+    const asyncFn = new Function('drone', 'sim', 'world', 'print', 'sleep',
       `return (async () => { ${code.includes('\n') || code.includes('return') ? code : `return (${code})`} })()`
     );
-    const result = await asyncFn(drone, sim, print, (ms: number) => drone.sleep(ms));
+    const result = await asyncFn(drone, sim, world, print, (ms: number) => drone.sleep(ms));
     if (result !== undefined) {
       print(formatResult(result));
     }
@@ -54,10 +57,10 @@ async function evalCommand(code: string): Promise<void> {
     // If the expression-return form failed with a syntax error, try as statements
     if (e instanceof SyntaxError) {
       try {
-        const asyncFn = new Function('drone', 'sim', 'print', 'sleep',
+        const asyncFn = new Function('drone', 'sim', 'world', 'print', 'sleep',
           `return (async () => { ${code} })()`
         );
-        const result = await asyncFn(drone, sim, print, (ms: number) => drone.sleep(ms));
+        const result = await asyncFn(drone, sim, world, print, (ms: number) => drone.sleep(ms));
         if (result !== undefined) {
           print(formatResult(result));
         }
