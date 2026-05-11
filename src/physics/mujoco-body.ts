@@ -107,7 +107,7 @@ export class MuJoCoBody {
 </mujoco>`;
   }
 
-  private setHeightfieldData(info: { heightmap: Float32Array; size: number; segments: number }): void {
+  setHeightfieldData(info: { heightmap: Float32Array; size: number; segments: number }): void {
     const nrow = info.segments + 1;
     const ncol = info.segments + 1;
     const hfData = this.model.hfield_data;

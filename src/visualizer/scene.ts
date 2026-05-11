@@ -53,9 +53,14 @@ export function createScene(): {
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
 
-  // Terrain with heightmap
-  const grassTex = loader.load('/textures/ground_grass.jpg');
-  const terrain = new Terrain(scene, grassTex);
+  // Terrain with heightmap — three tileable textures blended to hide repetition
+  const grassTex1 = loader.load('/textures/ground_grass.jpg');
+  grassTex1.wrapS = grassTex1.wrapT = THREE.RepeatWrapping;
+  const grassTex2 = loader.load('/textures/grass_color.jpg');
+  grassTex2.wrapS = grassTex2.wrapT = THREE.RepeatWrapping;
+  const groundTex = loader.load('/textures/ground_color.jpg');
+  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
+  const terrain = new Terrain(scene, grassTex1, grassTex2, groundTex);
 
   // Environment objects (trees, rocks, etc.)
   const environment = new Environment(scene, terrain);

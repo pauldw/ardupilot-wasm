@@ -58,6 +58,14 @@ export class SimLoop {
     this.body.collisionCheck = (north, east, down) =>
       this.scene.environment.checkCollision(north, east, down);
 
+    this.scene.terrain.onHeightDataChanged = () => {
+      this.body.setHeightfieldData({
+        heightmap: this.scene.terrain.heightData,
+        size: this.scene.terrain.size,
+        segments: this.scene.terrain.segments,
+      });
+    };
+
   }
 
   async initPhysics(onLog?: (msg: string) => void): Promise<void> {
