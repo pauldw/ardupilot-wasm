@@ -62,9 +62,9 @@ export class MuJoCoBody {
 
   private buildMJCF(hasHeightfield: boolean): string {
     const L = C.ARM_LENGTH;
-    // Body frame origin at bottom of drone (foot sphere bottom = z=0)
-    // CoM is 0.045m above bottom (foot sphere center at 0.03 + radius 0.015)
-    const Z = 0.045; // offset from bottom to center
+    // Body frame origin at bottom of drone
+    // CoM roughly at center of mass — motors at z≈0.13, body center ~0.10
+    const Z = 0.10; // offset from bottom to CoM
     const hfieldAsset = hasHeightfield
       ? `<hfield name="terrain" nrow="129" ncol="129" size="200 200 ${MAX_TERRAIN_HEIGHT} 0.01"/>`
       : '';
@@ -73,12 +73,12 @@ export class MuJoCoBody {
       : `<geom type="plane" size="200 200 0.1" friction="1 0.5 0.1" rgba="0.3 0.5 0.3 0"/>`;
 
     return `<mujoco model="f450">
-  <option timestep="${C.PHYSICS_DT}" integrator="RK4" gravity="0 0 -${C.GRAVITY}">
+  <option timestep="${C.PHYSICS_DT}" integrator="RK4" gravity="0 0 -${C.GRAVITY}" cone="elliptic" impratio="10" noslip_iterations="3">
     <flag energy="disable"/>
   </option>
 
   <default>
-    <geom condim="4" friction="1 0.5 0.1" solimp="0.95 0.99 0.001" solref="0.004 1"/>
+    <geom condim="4" friction="1 0.02 0.01" solimp="0.95 0.99 0.001 0.5 2" solref="0.008 1"/>
   </default>
 
   <asset>
@@ -123,13 +123,13 @@ export class MuJoCoBody {
   }
 
   private generateHullOBJ(): string {
-    const L = C.ARM_LENGTH;
-    const R = 0.10;     // prop radius
-    const zBot = 0;     // foot bottom level
-    const zTop = 0.085; // top of prop/motor area
+    // Dimensions matched to drone.glb visual model (not physics config)
+    const L = 0.095;    // motor distance from center in GLB
+    const R = 0.055;    // prop radius in GLB
+    const zBot = 0;     // landing gear bottom
+    const zTop = 0.20;  // top of drone body (GLB Y max ≈ 0.202)
 
     // MuJoCo body frame (Z-up, origin at bottom of drone)
-    // Motor positions in MJ body: FR=(+L,-L), BL=(-L,+L), FL=(+L,+L), BR=(-L,-L)
     const motors = [
       [L, -L], [-L, L], [L, L], [-L, -L],
     ];
