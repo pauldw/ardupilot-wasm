@@ -105,6 +105,10 @@ export class ArduPilotBridge {
       'SIM_GPS1_NUMSATS 15',
       // Relax EKF checks for faster convergence
       'EK3_GPS_CHECK 0',
+      'EK3_IMU_MASK 1',
+      'EK3_MAG_CAL 2',
+      'EK3_GBIAS_P_NSE 0.001',
+      'GPS_AUTO_CONFIG 0',
       // Mark accelerometers as calibrated
       'INS_ACCOFFS_X 0.001',
       'INS_ACCOFFS_Y 0.001',
