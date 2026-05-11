@@ -21,11 +21,8 @@ export class CameraController {
     this.followTarget.set(dronePosition[0], -dronePosition[2], -dronePosition[1]);
 
     const delta = new THREE.Vector3().subVectors(this.followTarget, this.controls.target);
-    const lerpFactor = 0.05;
-    const step = delta.multiplyScalar(lerpFactor);
-
-    this.controls.target.add(step);
-    this.camera.position.add(step);
+    this.controls.target.add(delta);
+    this.camera.position.add(delta);
 
     this.controls.update();
   }
