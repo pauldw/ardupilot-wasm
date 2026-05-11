@@ -8,6 +8,6 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['ardupilot.js'],
+    exclude: ['ardupilot.js', '@mujoco/mujoco'],
   },
 });

@@ -1,6 +1,7 @@
 import * as C from './physics/config';
 import { MotorSet } from './physics/motor';
-import { RigidBody, quatToEuler } from './physics/rigid-body';
+import { MuJoCoBody } from './physics/mujoco-body';
+import { quatToEuler } from './physics/rigid-body';
 import { Wind } from './physics/wind';
 import { createScene } from './visualizer/scene';
 import { DroneModel } from './visualizer/drone-model';
@@ -12,7 +13,7 @@ import { encodeHeartbeat, encodeFrame, MavlinkParser } from './mavlink/mavlink';
 import type { ParsedMessage } from './mavlink/mavlink';
 
 export class SimLoop {
-  body: RigidBody;
+  body: MuJoCoBody;
   motors: MotorSet;
   wind: Wind;
   simTime = 0;
@@ -33,7 +34,7 @@ export class SimLoop {
   private onMessage: ((msg: ParsedMessage) => void) | null = null;
 
   constructor() {
-    this.body = new RigidBody();
+    this.body = new MuJoCoBody();
     this.motors = new MotorSet();
     this.wind = new Wind(2, 45, 1.0, 1.0);
 
@@ -60,6 +61,17 @@ export class SimLoop {
     // Connect terrain to shadow projection
     this.drone.terrainHeightAt = (worldX, worldZ) =>
       this.scene.terrain.getHeightAtWorld(worldX, worldZ);
+  }
+
+  async initPhysics(onLog?: (msg: string) => void): Promise<void> {
+    await this.body.init(
+      {
+        heightmap: this.scene.terrain.heightData,
+        size: this.scene.terrain.size,
+        segments: this.scene.terrain.segments,
+      },
+      onLog,
+    );
   }
 
   async initWasm(onLog?: (msg: string) => void): Promise<boolean> {

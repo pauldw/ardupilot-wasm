@@ -82,9 +82,9 @@ function generateHeightmap(segments: number, seed = 42): Float32Array {
 
 export class Terrain {
   mesh: THREE.Mesh;
-  private heightData: Float32Array;
-  private segments: number;
-  private size: number;
+  readonly heightData: Float32Array;
+  readonly segments: number;
+  readonly size: number;
 
   constructor(scene: THREE.Scene, grassTexture: THREE.Texture) {
     this.segments = TERRAIN_SEGMENTS;

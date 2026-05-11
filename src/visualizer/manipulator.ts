@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { RigidBody, quatToRotationMatrix } from '../physics/rigid-body';
+import { quatToRotationMatrix } from '../physics/rigid-body';
+import type { PhysicsBody } from '../physics/physics-body';
 
 const SPRING_K = 30;    // N/m
 const DAMPING = 20;     // N/(m/s)
@@ -10,7 +11,7 @@ export class Manipulator {
   private camera: THREE.PerspectiveCamera;
   private domElement: HTMLElement;
   private droneGroup: THREE.Group;
-  private body: RigidBody;
+  private body: PhysicsBody;
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
 
@@ -25,7 +26,7 @@ export class Manipulator {
     camera: THREE.PerspectiveCamera,
     domElement: HTMLElement,
     droneGroup: THREE.Group,
-    body: RigidBody,
+    body: PhysicsBody,
   ) {
     this.camera = camera;
     this.domElement = domElement;

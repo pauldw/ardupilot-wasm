@@ -1,0 +1,270 @@
+import * as C from './config';
+import { quatToRotationMatrix, quatToEuler } from './rigid-body';
+
+const MAX_TERRAIN_HEIGHT = 8;
+
+export class MuJoCoBody {
+  position: number[] = [0, 0, 0];
+  velocity: number[] = [0, 0, 0];
+  quaternion: number[] = [1, 0, 0, 0];
+  omegaBody: number[] = [0, 0, 0];
+
+  readonly mass = C.MASS;
+  readonly I = C.INERTIA;
+  readonly Iinv = C.INERTIA.map(v => 1.0 / v);
+
+  groundHeightNED: ((north: number, east: number) => number) | null = null;
+  collisionCheck: ((north: number, east: number, down: number) => { pushNorth: number; pushEast: number } | null) | null = null;
+  externalForceWorld: number[] = [0, 0, 0];
+  externalTorqueBody: number[] = [0, 0, 0];
+
+  private mj: any = null;
+  private model: any = null;
+  private data: any = null;
+  private droneBodyId = 1;
+  private initialized = false;
+
+  async init(
+    terrainInfo?: { heightmap: Float32Array; size: number; segments: number },
+    onLog?: (msg: string) => void,
+  ): Promise<void> {
+    onLog?.('Loading MuJoCo physics engine...');
+    const loadMujoco = (await import('@mujoco/mujoco')).default;
+    this.mj = await loadMujoco();
+    onLog?.('MuJoCo loaded, creating simulation...');
+
+    const xml = this.buildMJCF(!!terrainInfo);
+    this.model = this.mj.MjModel.from_xml_string(xml);
+    this.data = new this.mj.MjData(this.model);
+
+    if (terrainInfo) {
+      this.setHeightfieldData(terrainInfo);
+    }
+
+    // Initial position: body frame origin at bottom of drone, on ground
+    this.data.qpos[0] = 0;
+    this.data.qpos[1] = 0;
+    this.data.qpos[2] = 0;
+    this.data.qpos[3] = 1;
+    this.data.qpos[4] = 0;
+    this.data.qpos[5] = 0;
+    this.data.qpos[6] = 0;
+
+    this.mj.mj_forward(this.model, this.data);
+    this.readState();
+    this.initialized = true;
+    onLog?.('MuJoCo physics ready');
+  }
+
+  private buildMJCF(hasHeightfield: boolean): string {
+    const L = C.ARM_LENGTH;
+    // Body frame origin at bottom of drone (foot sphere bottom = z=0)
+    // CoM is 0.045m above bottom (foot sphere center at 0.03 + radius 0.015)
+    const Z = 0.045; // offset from bottom to center
+    const hfieldAsset = hasHeightfield
+      ? `<hfield name="terrain" nrow="129" ncol="129" size="200 200 ${MAX_TERRAIN_HEIGHT} 0.01"/>`
+      : '';
+    const groundGeom = hasHeightfield
+      ? `<geom type="hfield" hfield="terrain" friction="1 0.5 0.1" rgba="0.3 0.5 0.3 0"/>`
+      : `<geom type="plane" size="200 200 0.1" friction="1 0.5 0.1" rgba="0.3 0.5 0.3 0"/>`;
+
+    return `<mujoco model="f450">
+  <option timestep="${C.PHYSICS_DT}" integrator="RK4" gravity="0 0 -${C.GRAVITY}">
+    <flag energy="disable"/>
+  </option>
+
+  <default>
+    <geom condim="4" friction="1 0.5 0.1" solimp="0.95 0.99 0.001" solref="0.004 1"/>
+  </default>
+
+  <asset>
+    ${hfieldAsset}
+  </asset>
+
+  <worldbody>
+    ${groundGeom}
+
+    <body name="drone" pos="0 0 0">
+      <freejoint name="root"/>
+      <inertial pos="0 0 ${Z}" mass="${C.MASS}" diaginertia="${C.INERTIA[0]} ${C.INERTIA[1]} ${C.INERTIA[2]}"/>
+
+      <geom name="body" type="box" size="0.06 0.06 0.025" pos="0 0 ${Z}" mass="0" rgba="0.2 0.2 0.2 0"/>
+
+      <geom name="arm1" type="capsule" fromto="0 0 ${Z}  ${L} ${-L} ${Z}" size="0.012" mass="0" rgba="0 0 0 0"/>
+      <geom name="arm2" type="capsule" fromto="0 0 ${Z} ${-L}  ${L} ${Z}" size="0.012" mass="0" rgba="0 0 0 0"/>
+      <geom name="arm3" type="capsule" fromto="0 0 ${Z}  ${L}  ${L} ${Z}" size="0.012" mass="0" rgba="0 0 0 0"/>
+      <geom name="arm4" type="capsule" fromto="0 0 ${Z} ${-L} ${-L} ${Z}" size="0.012" mass="0" rgba="0 0 0 0"/>
+
+      <geom name="foot1" type="sphere" size="0.015" pos=" ${L} ${-L} 0.015" mass="0" rgba="0 0 0 0"/>
+      <geom name="foot2" type="sphere" size="0.015" pos="${-L}  ${L} 0.015" mass="0" rgba="0 0 0 0"/>
+      <geom name="foot3" type="sphere" size="0.015" pos=" ${L}  ${L} 0.015" mass="0" rgba="0 0 0 0"/>
+      <geom name="foot4" type="sphere" size="0.015" pos="${-L} ${-L} 0.015" mass="0" rgba="0 0 0 0"/>
+
+      <geom name="motor1" type="cylinder" pos=" ${L} ${-L} ${Z + 0.03}" size="0.02 0.015" mass="0" rgba="0 0 0 0"/>
+      <geom name="motor2" type="cylinder" pos="${-L}  ${L} ${Z + 0.03}" size="0.02 0.015" mass="0" rgba="0 0 0 0"/>
+      <geom name="motor3" type="cylinder" pos=" ${L}  ${L} ${Z + 0.03}" size="0.02 0.015" mass="0" rgba="0 0 0 0"/>
+      <geom name="motor4" type="cylinder" pos="${-L} ${-L} ${Z + 0.03}" size="0.02 0.015" mass="0" rgba="0 0 0 0"/>
+
+      <site name="imu" pos="0 0 ${Z}"/>
+    </body>
+  </worldbody>
+
+  <sensor>
+    <gyro name="gyro" site="imu"/>
+    <accelerometer name="accel" site="imu"/>
+  </sensor>
+</mujoco>`;
+  }
+
+  private setHeightfieldData(info: { heightmap: Float32Array; size: number; segments: number }): void {
+    const nrow = info.segments + 1;
+    const ncol = info.segments + 1;
+    const hfData = this.model.hfield_data;
+
+    // MuJoCo hfield: row 0 = y_min, col 0 = x_max
+    // Our terrain: heightData[iy * vertSize + ix], ix increases with MJ_x, iy increases with MJ_y
+    // hfield[row * ncol + col] maps to terrain[row * vertSize + (segments - col)]
+    for (let row = 0; row < nrow; row++) {
+      for (let col = 0; col < ncol; col++) {
+        const ix = info.segments - col;
+        const iy = row;
+        hfData[row * ncol + col] = info.heightmap[iy * nrow + ix] / MAX_TERRAIN_HEIGHT;
+      }
+    }
+  }
+
+  update(dt: number, forceBody: number[], torqueBody: number[], windVelocity?: number[]): void {
+    if (!this.initialized) return;
+
+    // Get MuJoCo rotation matrix (body-to-world, row-major, 9 values per body)
+    const bo = this.droneBodyId * 9;
+    const R = [
+      [this.data.xmat[bo], this.data.xmat[bo + 1], this.data.xmat[bo + 2]],
+      [this.data.xmat[bo + 3], this.data.xmat[bo + 4], this.data.xmat[bo + 5]],
+      [this.data.xmat[bo + 6], this.data.xmat[bo + 7], this.data.xmat[bo + 8]],
+    ];
+
+    // Convert NED body-frame force to MuJoCo body-frame: [fx, -fy, -fz]
+    const mjFBody = [forceBody[0], -forceBody[1], -forceBody[2]];
+    const mjTBody = [torqueBody[0], -torqueBody[1], -torqueBody[2]];
+
+    // Rotate to MuJoCo world frame
+    const mjFWorld = [
+      R[0][0] * mjFBody[0] + R[0][1] * mjFBody[1] + R[0][2] * mjFBody[2],
+      R[1][0] * mjFBody[0] + R[1][1] * mjFBody[1] + R[1][2] * mjFBody[2],
+      R[2][0] * mjFBody[0] + R[2][1] * mjFBody[1] + R[2][2] * mjFBody[2],
+    ];
+    const mjTWorld = [
+      R[0][0] * mjTBody[0] + R[0][1] * mjTBody[1] + R[0][2] * mjTBody[2],
+      R[1][0] * mjTBody[0] + R[1][1] * mjTBody[1] + R[1][2] * mjTBody[2],
+      R[2][0] * mjTBody[0] + R[2][1] * mjTBody[1] + R[2][2] * mjTBody[2],
+    ];
+
+    // Wind drag (NED wind → MJ world)
+    const wind = windVelocity ?? [0, 0, 0];
+    const mjWind = [wind[0], -wind[1], -wind[2]];
+    const mjVel = [this.data.qvel[0], this.data.qvel[1], this.data.qvel[2]];
+    for (let i = 0; i < 3; i++) {
+      mjFWorld[i] -= C.LINEAR_DRAG_COEFF * (mjVel[i] - mjWind[i]);
+    }
+
+    // External forces from manipulator (NED world → MJ world)
+    mjFWorld[0] += this.externalForceWorld[0];
+    mjFWorld[1] += -this.externalForceWorld[1];
+    mjFWorld[2] += -this.externalForceWorld[2];
+
+    // External torque (NED body → MJ body → MJ world)
+    const mjExtTBody = [
+      this.externalTorqueBody[0],
+      -this.externalTorqueBody[1],
+      -this.externalTorqueBody[2],
+    ];
+    mjTWorld[0] += R[0][0] * mjExtTBody[0] + R[0][1] * mjExtTBody[1] + R[0][2] * mjExtTBody[2];
+    mjTWorld[1] += R[1][0] * mjExtTBody[0] + R[1][1] * mjExtTBody[1] + R[1][2] * mjExtTBody[2];
+    mjTWorld[2] += R[2][0] * mjExtTBody[0] + R[2][1] * mjExtTBody[1] + R[2][2] * mjExtTBody[2];
+
+    // Apply via xfrc_applied [fx, fy, fz, tx, ty, tz] per body
+    const fo = this.droneBodyId * 6;
+    this.data.xfrc_applied[fo + 0] = mjFWorld[0];
+    this.data.xfrc_applied[fo + 1] = mjFWorld[1];
+    this.data.xfrc_applied[fo + 2] = mjFWorld[2];
+    this.data.xfrc_applied[fo + 3] = mjTWorld[0];
+    this.data.xfrc_applied[fo + 4] = mjTWorld[1];
+    this.data.xfrc_applied[fo + 5] = mjTWorld[2];
+
+    this.mj.mj_step(this.model, this.data);
+    this.readState();
+
+    // Post-step environment collision (objects not in MuJoCo world)
+    if (this.collisionCheck) {
+      const hit = this.collisionCheck(this.position[0], this.position[1], this.position[2]);
+      if (hit) {
+        this.position[0] += hit.pushNorth;
+        this.position[1] += hit.pushEast;
+        this.data.qpos[0] = this.position[0];
+        this.data.qpos[1] = -this.position[1];
+
+        const dotN = this.velocity[0] * hit.pushNorth + this.velocity[1] * hit.pushEast;
+        const pushLen = Math.sqrt(hit.pushNorth * hit.pushNorth + hit.pushEast * hit.pushEast);
+        if (pushLen > 0.001 && dotN < 0) {
+          const nx = hit.pushNorth / pushLen;
+          const ny = hit.pushEast / pushLen;
+          this.velocity[0] -= nx * dotN * 1.5;
+          this.velocity[1] -= ny * dotN * 1.5;
+          this.data.qvel[0] = this.velocity[0];
+          this.data.qvel[1] = -this.velocity[1];
+        }
+      }
+    }
+  }
+
+  private readState(): void {
+    // Position: MJ [x,y,z] → NED [x, -y, -z]
+    this.position[0] = this.data.qpos[0];
+    this.position[1] = -this.data.qpos[1];
+    this.position[2] = -this.data.qpos[2];
+
+    // Velocity: MJ [vx,vy,vz] → NED [vx, -vy, -vz]
+    this.velocity[0] = this.data.qvel[0];
+    this.velocity[1] = -this.data.qvel[1];
+    this.velocity[2] = -this.data.qvel[2];
+
+    // Quaternion: MJ [w,x,y,z] → NED [w, x, -y, -z]
+    this.quaternion[0] = this.data.qpos[3];
+    this.quaternion[1] = this.data.qpos[4];
+    this.quaternion[2] = -this.data.qpos[5];
+    this.quaternion[3] = -this.data.qpos[6];
+
+    // Angular velocity: MJ qvel[3:6] is world-frame, convert to NED body-frame
+    const bo = this.droneBodyId * 9;
+    const R = [
+      [this.data.xmat[bo], this.data.xmat[bo + 1], this.data.xmat[bo + 2]],
+      [this.data.xmat[bo + 3], this.data.xmat[bo + 4], this.data.xmat[bo + 5]],
+      [this.data.xmat[bo + 6], this.data.xmat[bo + 7], this.data.xmat[bo + 8]],
+    ];
+    // R^T * omega_world → omega_body (in MJ frame)
+    const ow = [this.data.qvel[3], this.data.qvel[4], this.data.qvel[5]];
+    const mjOmegaBody = [
+      R[0][0] * ow[0] + R[1][0] * ow[1] + R[2][0] * ow[2],
+      R[0][1] * ow[0] + R[1][1] * ow[1] + R[2][1] * ow[2],
+      R[0][2] * ow[0] + R[1][2] * ow[1] + R[2][2] * ow[2],
+    ];
+    // MJ body → NED body: [p, -q, -r]
+    this.omegaBody[0] = mjOmegaBody[0];
+    this.omegaBody[1] = -mjOmegaBody[1];
+    this.omegaBody[2] = -mjOmegaBody[2];
+  }
+
+  get altitude(): number {
+    return -this.position[2];
+  }
+
+  get eulerDeg(): [number, number, number] {
+    const [r, p, y] = quatToEuler(this.quaternion);
+    return [r * 180 / Math.PI, p * 180 / Math.PI, y * 180 / Math.PI];
+  }
+
+  get rotationMatrix(): number[][] {
+    return quatToRotationMatrix(this.quaternion);
+  }
+}

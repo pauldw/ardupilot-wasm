@@ -133,16 +133,21 @@ cmdInput.addEventListener('keydown', (e) => {
 });
 
 print('ArduPilot WASM Simulator - JavaScript Console');
-print('Loading WASM module...');
 
-sim.startRenderLoop();
+sim.initPhysics(print).then(() => {
+  sim.startRenderLoop();
 
-sim.initWasm(print).then((ok) => {
-  if (ok) {
-    print('ArduPilot flight controller active');
-    print('Type drone.help() for commands, or any JavaScript');
-    print('Quick start: await drone.mode("guided")');
-  } else {
-    print('Running in standalone physics mode');
-  }
+  print('Loading ArduPilot WASM...');
+  sim.initWasm(print).then((ok) => {
+    if (ok) {
+      print('ArduPilot flight controller active');
+      print('Type drone.help() for commands, or any JavaScript');
+      print('Quick start: await drone.mode("guided")');
+    } else {
+      print('Running in standalone physics mode');
+    }
+  });
+}).catch((e) => {
+  print(`MuJoCo init failed: ${e}. Physics unavailable.`);
+  console.error('MuJoCo init failed:', e);
 });
