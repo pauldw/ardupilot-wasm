@@ -33,8 +33,12 @@ export class MuJoCoBody {
     this.mj = await loadMujoco();
     onLog?.('MuJoCo loaded, creating simulation...');
 
+    // Write model files to virtual filesystem
+    this.mj.FS.mkdir('/model');
+    this.mj.FS.writeFile('/model/hull.obj', this.generateHullOBJ());
     const xml = this.buildMJCF(!!terrainInfo);
-    this.model = this.mj.MjModel.from_xml_string(xml);
+    this.mj.FS.writeFile('/model/drone.xml', xml);
+    this.model = this.mj.MjModel.mj_loadXML('/model/drone.xml');
     this.data = new this.mj.MjData(this.model);
 
     if (terrainInfo) {
@@ -78,6 +82,7 @@ export class MuJoCoBody {
   </default>
 
   <asset>
+    <mesh name="drone_hull" file="hull.obj" refpos="0 0 0" refquat="1 0 0 0"/>
     ${hfieldAsset}
   </asset>
 
@@ -88,22 +93,8 @@ export class MuJoCoBody {
       <freejoint name="root"/>
       <inertial pos="0 0 ${Z}" mass="${C.MASS}" diaginertia="${C.INERTIA[0]} ${C.INERTIA[1]} ${C.INERTIA[2]}"/>
 
-      <geom name="body" type="box" size="0.06 0.06 0.025" pos="0 0 ${Z}" mass="0" rgba="0.2 0.2 0.2 0"/>
-
-      <geom name="arm1" type="capsule" fromto="0 0 ${Z}  ${L} ${-L} ${Z}" size="0.012" mass="0" rgba="0 0 0 0"/>
-      <geom name="arm2" type="capsule" fromto="0 0 ${Z} ${-L}  ${L} ${Z}" size="0.012" mass="0" rgba="0 0 0 0"/>
-      <geom name="arm3" type="capsule" fromto="0 0 ${Z}  ${L}  ${L} ${Z}" size="0.012" mass="0" rgba="0 0 0 0"/>
-      <geom name="arm4" type="capsule" fromto="0 0 ${Z} ${-L} ${-L} ${Z}" size="0.012" mass="0" rgba="0 0 0 0"/>
-
-      <geom name="foot1" type="sphere" size="0.015" pos=" ${L} ${-L} 0.015" mass="0" rgba="0 0 0 0"/>
-      <geom name="foot2" type="sphere" size="0.015" pos="${-L}  ${L} 0.015" mass="0" rgba="0 0 0 0"/>
-      <geom name="foot3" type="sphere" size="0.015" pos=" ${L}  ${L} 0.015" mass="0" rgba="0 0 0 0"/>
-      <geom name="foot4" type="sphere" size="0.015" pos="${-L} ${-L} 0.015" mass="0" rgba="0 0 0 0"/>
-
-      <geom name="motor1" type="cylinder" pos=" ${L} ${-L} ${Z + 0.03}" size="0.02 0.015" mass="0" rgba="0 0 0 0"/>
-      <geom name="motor2" type="cylinder" pos="${-L}  ${L} ${Z + 0.03}" size="0.02 0.015" mass="0" rgba="0 0 0 0"/>
-      <geom name="motor3" type="cylinder" pos=" ${L}  ${L} ${Z + 0.03}" size="0.02 0.015" mass="0" rgba="0 0 0 0"/>
-      <geom name="motor4" type="cylinder" pos="${-L} ${-L} ${Z + 0.03}" size="0.02 0.015" mass="0" rgba="0 0 0 0"/>
+      <!-- Convex hull of the drone mesh — handles all contact orientations -->
+      <geom name="hull" type="mesh" mesh="drone_hull" mass="0" rgba="0.2 0.2 0.2 0"/>
 
       <site name="imu" pos="0 0 ${Z}"/>
     </body>
@@ -121,16 +112,69 @@ export class MuJoCoBody {
     const ncol = info.segments + 1;
     const hfData = this.model.hfield_data;
 
-    // MuJoCo hfield: row 0 = y_min, col 0 = x_max
-    // Our terrain: heightData[iy * vertSize + ix], ix increases with MJ_x, iy increases with MJ_y
-    // hfield[row * ncol + col] maps to terrain[row * vertSize + (segments - col)]
+    // MuJoCo mjModel hfield_data (runtime): row 0 = y_min, col 0 = x_min
+    // Terrain heightData[iy * vertSize + ix]: ix=0 → worldX=-200 (x_min), iy=0 → worldZ=-200 (y_min)
+    // Direct 1:1 mapping — no axis reversal needed
     for (let row = 0; row < nrow; row++) {
       for (let col = 0; col < ncol; col++) {
-        const ix = info.segments - col;
-        const iy = row;
-        hfData[row * ncol + col] = info.heightmap[iy * nrow + ix] / MAX_TERRAIN_HEIGHT;
+        hfData[row * ncol + col] = info.heightmap[row * ncol + col] / MAX_TERRAIN_HEIGHT;
       }
     }
+  }
+
+  private generateHullOBJ(): string {
+    const L = C.ARM_LENGTH;
+    const R = 0.10;     // prop radius
+    const zBot = 0;     // foot bottom level
+    const zTop = 0.085; // top of prop/motor area
+
+    // MuJoCo body frame (Z-up, origin at bottom of drone)
+    // Motor positions in MJ body: FR=(+L,-L), BL=(-L,+L), FL=(+L,+L), BR=(-L,-L)
+    const motors = [
+      [L, -L], [-L, L], [L, L], [-L, -L],
+    ];
+
+    const verts: number[][] = [];
+
+    // Bottom: 4 arm tips + center
+    for (const [mx, my] of motors) {
+      verts.push([mx, my, zBot]);
+    }
+    verts.push([0, 0, zBot]);
+
+    // Top: sample 8 points around each prop circle
+    for (const [mx, my] of motors) {
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        verts.push([mx + R * Math.cos(a), my + R * Math.sin(a), zTop]);
+      }
+    }
+
+    // Center top
+    verts.push([0, 0, zTop]);
+
+    // Write OBJ — MuJoCo uses convex hull of all vertices for collision
+    const lines: string[] = [];
+    for (const [x, y, z] of verts) {
+      lines.push(`v ${x.toFixed(5)} ${y.toFixed(5)} ${z.toFixed(5)}`);
+    }
+
+    // Minimal triangulation (MuJoCo ignores faces, uses convex hull)
+    // Bottom fan
+    lines.push('f 1 2 5');
+    lines.push('f 2 3 5');
+    lines.push('f 3 4 5');
+    lines.push('f 4 1 5');
+
+    // Connect bottom to top ring
+    const topStart = 6;
+    const topEnd = verts.length;
+    for (let i = topStart; i < topEnd - 1; i++) {
+      lines.push(`f 1 ${i} ${i + 1}`);
+    }
+    lines.push(`f 1 ${topEnd - 1} ${topStart}`);
+
+    return lines.join('\n');
   }
 
   update(dt: number, forceBody: number[], torqueBody: number[], windVelocity?: number[]): void {
@@ -167,6 +211,13 @@ export class MuJoCoBody {
     for (let i = 0; i < 3; i++) {
       mjFWorld[i] -= C.LINEAR_DRAG_COEFF * (mjVel[i] - mjWind[i]);
     }
+
+    // Rotational aerodynamic drag: τ = -b * ω (arms and prop discs resist rotation)
+    const ROTATIONAL_DRAG = 0.005;
+    const mjOmegaWorld = [this.data.qvel[3], this.data.qvel[4], this.data.qvel[5]];
+    mjTWorld[0] -= ROTATIONAL_DRAG * mjOmegaWorld[0];
+    mjTWorld[1] -= ROTATIONAL_DRAG * mjOmegaWorld[1];
+    mjTWorld[2] -= ROTATIONAL_DRAG * mjOmegaWorld[2];
 
     // External forces from manipulator (NED world → MJ world)
     mjFWorld[0] += this.externalForceWorld[0];

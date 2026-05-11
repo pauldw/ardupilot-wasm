@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { quatToRotationMatrix } from '../physics/rigid-body';
 import type { PhysicsBody } from '../physics/physics-body';
 
-const SPRING_K = 30;    // N/m
-const DAMPING = 20;     // N/(m/s)
-const ANGULAR_DAMPING = 0.3; // applied to omegaBody each frame while grabbed
-const MAX_FORCE = 50;   // N — clamp to prevent instability
+const SPRING_K = 20;       // N/m — soft grab, like holding with fingers
+const DAMPING = 15;        // N/(m/s) — velocity damping on the spring
+const MAX_FORCE = 25;      // N — reasonable hand force on a 1.2kg object
+const MAX_TORQUE = 0.5;    // N·m — clamp to prevent unrealistic spin-up
+const GRAB_ANG_DAMP = 0.08; // N·m/(rad/s) — hand resists drone rotation
 
 export class Manipulator {
   private camera: THREE.PerspectiveCamera;
@@ -177,16 +178,25 @@ export class Manipulator {
       r[0] * force[1] - r[1] * force[0],
     ];
     // World-to-body: R^T * torque
-    this.body.externalTorqueBody = [
+    const torqueBody = [
       R[0][0] * torqueWorld[0] + R[1][0] * torqueWorld[1] + R[2][0] * torqueWorld[2],
       R[0][1] * torqueWorld[0] + R[1][1] * torqueWorld[1] + R[2][1] * torqueWorld[2],
       R[0][2] * torqueWorld[0] + R[1][2] * torqueWorld[1] + R[2][2] * torqueWorld[2],
     ];
 
-    // Damp angular velocity while grabbed to prevent oscillation
+    // Physical angular damping: hand resists rotation (τ = -b * ω)
     for (let i = 0; i < 3; i++) {
-      this.body.omegaBody[i] *= (1 - ANGULAR_DAMPING);
+      torqueBody[i] -= GRAB_ANG_DAMP * this.body.omegaBody[i];
     }
+
+    // Clamp torque magnitude
+    const torqueMag = Math.sqrt(torqueBody[0] ** 2 + torqueBody[1] ** 2 + torqueBody[2] ** 2);
+    if (torqueMag > MAX_TORQUE) {
+      const s = MAX_TORQUE / torqueMag;
+      torqueBody[0] *= s; torqueBody[1] *= s; torqueBody[2] *= s;
+    }
+
+    this.body.externalTorqueBody = torqueBody;
   }
 
   get isGrabbing(): boolean {
