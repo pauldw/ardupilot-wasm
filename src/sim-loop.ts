@@ -42,6 +42,16 @@ export class SimLoop {
       this.scene.renderer.domElement
     );
     this.hud = new HUD();
+
+    // Connect terrain and colliders to physics
+    this.body.groundHeightNED = (north, east) =>
+      -this.scene.terrain.getHeightNED(north, east);
+    this.body.collisionCheck = (north, east, down) =>
+      this.scene.environment.checkCollision(north, east, down);
+
+    // Connect terrain to shadow projection
+    this.drone.terrainHeightAt = (worldX, worldZ) =>
+      this.scene.terrain.getHeightAtWorld(worldX, worldZ);
   }
 
   async initWasm(onLog?: (msg: string) => void): Promise<boolean> {

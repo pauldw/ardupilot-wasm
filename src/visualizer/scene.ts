@@ -1,9 +1,13 @@
 import * as THREE from 'three';
+import { Terrain } from './terrain';
+import { Environment } from './environment';
 
 export function createScene(): {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
+  terrain: Terrain;
+  environment: Environment;
 } {
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
@@ -49,24 +53,12 @@ export function createScene(): {
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
 
-  // Ground plane
-  const grassTex1 = loader.load('/textures/ground_grass.jpg');
-  grassTex1.wrapS = grassTex1.wrapT = THREE.RepeatWrapping;
-  grassTex1.repeat.set(40, 40);
-  const grassTex2 = loader.load('/textures/ground_grass2.jpg');
-  grassTex2.wrapS = grassTex2.wrapT = THREE.RepeatWrapping;
-  grassTex2.repeat.set(17, 17);
+  // Terrain with heightmap
+  const grassTex = loader.load('/textures/ground_grass.jpg');
+  const terrain = new Terrain(scene, grassTex);
 
-  const groundGeo = new THREE.PlaneGeometry(400, 400);
-  const groundMat = new THREE.MeshStandardMaterial({
-    map: grassTex1,
-    roughness: 0.95,
-    metalness: 0.0,
-  });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  // Environment objects (trees, rocks, etc.)
+  const environment = new Environment(scene, terrain);
 
   // Resize handler
   window.addEventListener('resize', () => {
@@ -75,5 +67,5 @@ export function createScene(): {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, camera, renderer };
+  return { scene, camera, renderer, terrain, environment };
 }

@@ -19,6 +19,7 @@ export class DroneModel {
   private propAngles = [0, 0, 0, 0];
   private shadow: THREE.Mesh;
   private loaded = false;
+  terrainHeightAt: ((worldX: number, worldZ: number) => number) | null = null;
 
   constructor(scene: THREE.Scene) {
     this.group = new THREE.Group();
@@ -123,9 +124,12 @@ export class DroneModel {
       }
     }
 
-    // Shadow
-    this.shadow.position.set(position[0], 0.01, -position[1]);
-    const alt = -position[2];
+    // Shadow — project onto terrain
+    const shadowWorldX = position[0];
+    const shadowWorldZ = -position[1];
+    const groundY = this.terrainHeightAt ? this.terrainHeightAt(shadowWorldX, shadowWorldZ) : 0;
+    this.shadow.position.set(shadowWorldX, groundY + 0.01, shadowWorldZ);
+    const alt = -position[2] - groundY;
     const shadowSize = Math.max(0.15, 0.30 - alt * 0.005);
     this.shadow.scale.set(shadowSize / 0.3, shadowSize / 0.3, 1);
     (this.shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(

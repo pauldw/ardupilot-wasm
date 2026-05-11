@@ -1,6 +1,7 @@
 node_modules/
 dist/
 wasm-build/output/
+assets/
 *.o
 *.err
 test-wasm*.cjs

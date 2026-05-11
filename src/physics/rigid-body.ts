@@ -85,6 +85,10 @@ export class RigidBody {
   readonly I: number[]; // diagonal inertia
   readonly Iinv: number[]; // inverse diagonal inertia
 
+  // Optional callbacks for terrain and collision
+  groundHeightNED: ((north: number, east: number) => number) | null = null;
+  collisionCheck: ((north: number, east: number, down: number) => { pushNorth: number; pushEast: number } | null) | null = null;
+
   constructor() {
     this.position = [0, 0, -C.INITIAL_ALTITUDE]; // NED: negative z = up
     this.velocity = [0, 0, 0];
@@ -117,8 +121,11 @@ export class RigidBody {
       this.position[i] += this.velocity[i] * dt;
     }
 
-    // Ground contact
-    const groundLimit = -C.LANDING_GEAR_HEIGHT;
+    // Ground contact — use terrain height if available
+    const terrainH = this.groundHeightNED
+      ? this.groundHeightNED(this.position[0], this.position[1])
+      : 0;
+    const groundLimit = terrainH - C.LANDING_GEAR_HEIGHT;
     if (this.position[2] >= groundLimit) {
       this.position[2] = groundLimit;
       if (this.velocity[2] > 0) this.velocity[2] = 0;
@@ -134,6 +141,23 @@ export class RigidBody {
       this.omegaBody[0] *= 0.8;
       this.omegaBody[1] *= 0.8;
       this.omegaBody[2] *= 0.8;
+    }
+
+    // Object collision
+    if (this.collisionCheck) {
+      const hit = this.collisionCheck(this.position[0], this.position[1], this.position[2]);
+      if (hit) {
+        this.position[0] += hit.pushNorth;
+        this.position[1] += hit.pushEast;
+        const dotN = this.velocity[0] * hit.pushNorth + this.velocity[1] * hit.pushEast;
+        const pushLen = Math.sqrt(hit.pushNorth * hit.pushNorth + hit.pushEast * hit.pushEast);
+        if (pushLen > 0.001 && dotN < 0) {
+          const nx = hit.pushNorth / pushLen;
+          const ny = hit.pushEast / pushLen;
+          this.velocity[0] -= nx * dotN * 1.5;
+          this.velocity[1] -= ny * dotN * 1.5;
+        }
+      }
     }
 
     // Rotational dynamics: I * omega_dot = torque - omega x (I * omega)
