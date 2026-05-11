@@ -89,6 +89,32 @@ export class RigidBody {
   groundHeightNED: ((north: number, east: number) => number) | null = null;
   collisionCheck: ((north: number, east: number, down: number) => { pushNorth: number; pushEast: number } | null) | null = null;
 
+  // External force/torque in world frame (NED), applied once per step then cleared
+  externalForceWorld: number[] = [0, 0, 0];
+  externalTorqueBody: number[] = [0, 0, 0];
+
+  // Multi-point contact hull in body frame (NED, relative to reference point)
+  // Reference point = bottom of drone model
+  private contactPoints: number[][] = [
+    // Bottom of each arm tip (landing feet)
+    [+C.ARM_LENGTH, +C.ARM_LENGTH, 0.0],   // FR
+    [-C.ARM_LENGTH, -C.ARM_LENGTH, 0.0],   // BL
+    [+C.ARM_LENGTH, -C.ARM_LENGTH, 0.0],   // FL
+    [-C.ARM_LENGTH, +C.ARM_LENGTH, 0.0],   // BR
+    // Bottom center
+    [0, 0, 0],
+    // Prop tips (top of drone, z negative = up in NED)
+    [+C.ARM_LENGTH + 0.05, +C.ARM_LENGTH, -0.13],
+    [-C.ARM_LENGTH - 0.05, -C.ARM_LENGTH, -0.13],
+    [+C.ARM_LENGTH, -C.ARM_LENGTH - 0.05, -0.13],
+    [-C.ARM_LENGTH, +C.ARM_LENGTH + 0.05, -0.13],
+    // Mid-body sides
+    [+0.11, 0, -0.05],
+    [-0.11, 0, -0.05],
+    [0, +0.11, -0.05],
+    [0, -0.11, -0.05],
+  ];
+
   constructor() {
     this.position = [0, 0, -C.INITIAL_ALTITUDE]; // NED: negative z = up
     this.velocity = [0, 0, 0];
@@ -108,6 +134,9 @@ export class RigidBody {
     // Gravity (NED: positive z is down)
     forceWorld[2] += this.mass * C.GRAVITY;
 
+    // External forces (manipulation tool, etc.)
+    for (let i = 0; i < 3; i++) forceWorld[i] += this.externalForceWorld[i];
+
     // Aerodynamic drag
     const wind = windVelocity ?? [0, 0, 0];
     for (let i = 0; i < 3; i++) {
@@ -121,26 +150,72 @@ export class RigidBody {
       this.position[i] += this.velocity[i] * dt;
     }
 
-    // Ground contact — use terrain height if available
-    const terrainH = this.groundHeightNED
-      ? this.groundHeightNED(this.position[0], this.position[1])
-      : 0;
-    const groundLimit = terrainH - C.LANDING_GEAR_HEIGHT;
-    if (this.position[2] >= groundLimit) {
-      this.position[2] = groundLimit;
-      if (this.velocity[2] > 0) this.velocity[2] = 0;
-      this.velocity[0] *= 0.8;
-      this.velocity[1] *= 0.8;
-      const lateralSpeed = Math.sqrt(
+    // Multi-point ground contact with contact torques for tumbling
+    let maxPen = 0;
+    const contactTorqueBody = [0, 0, 0];
+    const CONTACT_K = 1500; // N/m spring stiffness per contact point
+
+    for (const cp of this.contactPoints) {
+      const worldPt = [
+        R[0][0] * cp[0] + R[0][1] * cp[1] + R[0][2] * cp[2] + this.position[0],
+        R[1][0] * cp[0] + R[1][1] * cp[1] + R[1][2] * cp[2] + this.position[1],
+        R[2][0] * cp[0] + R[2][1] * cp[1] + R[2][2] * cp[2] + this.position[2],
+      ];
+
+      const terrainH = this.groundHeightNED
+        ? this.groundHeightNED(worldPt[0], worldPt[1])
+        : 0;
+
+      const pen = worldPt[2] - terrainH;
+      if (pen > maxPen) maxPen = pen;
+
+      if (pen > 0) {
+        // Normal force at this contact point (upward in NED = -z)
+        const fMag = CONTACT_K * pen;
+        // Force in body frame: R^T * [0, 0, -fMag]
+        const fBody = [
+          -fMag * R[2][0],
+          -fMag * R[2][1],
+          -fMag * R[2][2],
+        ];
+        // Torque = r_body × F_body
+        contactTorqueBody[0] += cp[1] * fBody[2] - cp[2] * fBody[1];
+        contactTorqueBody[1] += cp[2] * fBody[0] - cp[0] * fBody[2];
+        contactTorqueBody[2] += cp[0] * fBody[1] - cp[1] * fBody[0];
+      }
+    }
+
+    if (maxPen > 0) {
+      this.position[2] -= maxPen;
+
+      // Bounce with restitution
+      if (this.velocity[2] > 0) {
+        this.velocity[2] *= -0.3;
+      }
+
+      // Apply contact torques (causes tumbling from asymmetric contact)
+      for (let i = 0; i < 3; i++) {
+        this.omegaBody[i] += this.Iinv[i] * contactTorqueBody[i] * dt;
+      }
+
+      // Ground friction on linear velocity
+      const speed = Math.sqrt(
         this.velocity[0] * this.velocity[0] + this.velocity[1] * this.velocity[1]
       );
-      if (lateralSpeed < 0.05) {
+      if (speed < 0.01) {
         this.velocity[0] = 0;
         this.velocity[1] = 0;
+      } else {
+        const frictionDecel = 5.0 * dt;
+        const reduction = Math.min(frictionDecel / speed, 1);
+        this.velocity[0] *= (1 - reduction);
+        this.velocity[1] *= (1 - reduction);
       }
-      this.omegaBody[0] *= 0.8;
-      this.omegaBody[1] *= 0.8;
-      this.omegaBody[2] *= 0.8;
+
+      // Light angular damping (energy loss from ground contact, but allows tumbling)
+      for (let i = 0; i < 3; i++) {
+        this.omegaBody[i] *= (1 - 3.0 * dt);
+      }
     }
 
     // Object collision
@@ -168,7 +243,8 @@ export class RigidBody {
     ];
     const gyroscopic = cross(this.omegaBody, Iomega);
     for (let i = 0; i < 3; i++) {
-      const omegaDot = this.Iinv[i] * (torqueBody[i] - gyroscopic[i]);
+      const totalTorque = torqueBody[i] + this.externalTorqueBody[i];
+      const omegaDot = this.Iinv[i] * (totalTorque - gyroscopic[i]);
       this.omegaBody[i] += omegaDot * dt;
     }
 

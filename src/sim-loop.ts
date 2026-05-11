@@ -6,6 +6,7 @@ import { createScene } from './visualizer/scene';
 import { DroneModel } from './visualizer/drone-model';
 import { CameraController } from './visualizer/camera';
 import { HUD } from './visualizer/hud';
+import { Manipulator } from './visualizer/manipulator';
 import { ArduPilotBridge } from './wasm/ardupilot-bridge';
 import { encodeHeartbeat, encodeFrame, MavlinkParser } from './mavlink/mavlink';
 import type { ParsedMessage } from './mavlink/mavlink';
@@ -20,6 +21,7 @@ export class SimLoop {
   private drone: DroneModel;
   private cameraCtrl: CameraController;
   private hud: HUD;
+  private manipulator: Manipulator;
   private pwmValues = [1000, 1000, 1000, 1000];
   private mode = 'STABILIZE';
   private armed = false;
@@ -42,6 +44,12 @@ export class SimLoop {
       this.scene.renderer.domElement
     );
     this.hud = new HUD();
+    this.manipulator = new Manipulator(
+      this.scene.camera,
+      this.scene.renderer.domElement,
+      this.drone.group,
+      this.body,
+    );
 
     // Connect terrain and colliders to physics
     this.body.groundHeightNED = (north, east) =>
@@ -220,7 +228,10 @@ export class SimLoop {
       forceWorld[2] / this.body.mass + C.GRAVITY - C.LINEAR_DRAG_COEFF * airspeed[2] / this.body.mass,
     ];
 
-    if (this.body.position[2] >= -C.LANDING_GEAR_HEIGHT && aWorld[2] > 0) {
+    const groundH = this.body.groundHeightNED
+      ? this.body.groundHeightNED(this.body.position[0], this.body.position[1])
+      : 0;
+    if (this.body.position[2] >= groundH && aWorld[2] > 0) {
       aWorld[2] = 0;
     }
 
@@ -263,7 +274,13 @@ export class SimLoop {
       1 / 60,
     );
 
-    this.cameraCtrl.update(this.body.position);
+    this.manipulator.update();
+    this.cameraCtrl.controls.enabled = !this.manipulator.isGrabbing;
+    if (!this.manipulator.isShiftHeld) {
+      this.cameraCtrl.update(this.body.position);
+    } else {
+      this.cameraCtrl.controls.update();
+    }
 
     this.hud.update({
       altitude: this.body.altitude,
