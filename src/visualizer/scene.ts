@@ -36,7 +36,7 @@ function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lo
 }
 
 function createSkyAndLights(targetScene: THREE.Scene, trackProgress: boolean): THREE.Mesh {
-  const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+  const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
   sunLight.position.set(50, 80, 30);
   targetScene.add(sunLight);
 

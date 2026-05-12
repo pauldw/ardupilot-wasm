@@ -71,6 +71,15 @@ export class DroneModel {
           });
         }
 
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mat = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+            if (mat.isMeshStandardMaterial) {
+              mat.envMapIntensity = 0.6;
+            }
+          }
+        });
+
         this.group.add(model);
         this.loaded = true;
         if (track) completeAsset('drone');
