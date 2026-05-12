@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { Terrain } from './terrain';
 import { Environment } from './environment';
@@ -52,6 +56,7 @@ export function createScene(): {
   pipScene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
+  composer: EffectComposer;
   terrain: Terrain;
   environment: Environment;
   sky: THREE.Mesh;
@@ -76,6 +81,17 @@ export function createScene(): {
   renderer.setClearColor(0x000000, 1);
   document.getElementById('canvas-container')!.appendChild(renderer.domElement);
 
+  // FXAA post-processing (cheap screen-space AA for mesh edges)
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const fxaaPass = new ShaderPass(FXAAShader);
+  const pixelRatio = renderer.getPixelRatio();
+  fxaaPass.material.uniforms['resolution'].value.set(
+    1 / (window.innerWidth * pixelRatio),
+    1 / (window.innerHeight * pixelRatio),
+  );
+  composer.addPass(fxaaPass);
+
   const sky = createSkyAndLights(scene);
   createSplat(renderer, scene);
 
@@ -92,7 +108,13 @@ export function createScene(): {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    const pr = renderer.getPixelRatio();
+    fxaaPass.material.uniforms['resolution'].value.set(
+      1 / (window.innerWidth * pr),
+      1 / (window.innerHeight * pr),
+    );
   });
 
-  return { scene, pipScene, camera, renderer, terrain, environment, sky };
+  return { scene, pipScene, camera, renderer, composer, terrain, environment, sky };
 }

@@ -309,8 +309,8 @@ export class SimLoop {
       this.gimbalServo.angleDeg,
     );
 
-    // Main scene render
-    this.scene.renderer.render(this.scene.scene, this.scene.camera);
+    // Main scene render with FXAA
+    this.scene.composer.render();
 
     // PIP overlay on top of main scene
     this.pipCamera.renderOverlay(this.scene.renderer);

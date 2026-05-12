@@ -55,7 +55,7 @@ export class PipCamera {
     // Widen FBO camera FOV to cover barrel distortion overshoot at edges
     const overVfovRad = 2 * Math.atan(Math.tan(vfovRad / 2) * overrender);
     this.camera = new THREE.PerspectiveCamera(
-      overVfovRad * 180 / Math.PI, aspect, 0.1, 5000,
+      overVfovRad * 180 / Math.PI, aspect, 0.01, 5000,
     );
 
     this.label = document.createElement('div');
