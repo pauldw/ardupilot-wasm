@@ -153,12 +153,7 @@ export function encodeHeartbeat(): Uint8Array {
 export function encodeSetMode(mode: string): Uint8Array | null {
   const customMode = COPTER_MODES[mode.toUpperCase()];
   if (customMode === undefined) return null;
-  const payload = new Uint8Array(6);
-  const dv = new DataView(payload.buffer);
-  dv.setUint32(0, customMode, true);
-  payload[4] = TARGET_SYSID;
-  payload[5] = 0x01;
-  return encodeFrame(MSG_SET_MODE, payload);
+  return encodeCommandLong(MAV_CMD_DO_SET_MODE, 1, customMode);
 }
 
 export function encodeCommandLong(

@@ -56,49 +56,53 @@ export class Drone {
 
   // --- High-level commands matching drone_console.py ---
 
-  async arm(force = false): Promise<void> {
+  async arm(force = false): Promise<boolean> {
     this.send(force ? encodeForceArm() : encodeArm());
     const ack = await this.recv('COMMAND_ACK', 5000);
     if (ack && ack.type === 'COMMAND_ACK') {
       this.print(`arm: ${ack.resultText}`);
-    } else {
-      this.print('arm: no response');
+      return ack.result === 0;
     }
+    this.print('arm: no response');
+    return false;
   }
 
-  async disarm(force = false): Promise<void> {
+  async disarm(force = false): Promise<boolean> {
     this.send(force ? encodeForceDisarm() : encodeDisarm());
     const ack = await this.recv('COMMAND_ACK', 5000);
     if (ack && ack.type === 'COMMAND_ACK') {
       this.print(`disarm: ${ack.resultText}`);
-    } else {
-      this.print('disarm: no response');
+      return ack.result === 0;
     }
+    this.print('disarm: no response');
+    return false;
   }
 
-  async mode(name: string): Promise<void> {
+  async mode(name: string): Promise<boolean> {
     const pkt = encodeSetMode(name);
     if (!pkt) {
       this.print(`Unknown mode: ${name}. Available: ${COPTER_MODE_NAMES.join(', ')}`);
-      return;
+      return false;
     }
     this.send(pkt);
     const ack = await this.recv('COMMAND_ACK', 5000);
     if (ack && ack.type === 'COMMAND_ACK') {
       this.print(`mode ${name.toUpperCase()}: ${ack.resultText}`);
-    } else {
-      this.print(`mode ${name.toUpperCase()}: no response`);
+      return ack.result === 0;
     }
+    this.print(`mode ${name.toUpperCase()}: no response`);
+    return false;
   }
 
-  async takeoff(alt: number): Promise<void> {
+  async takeoff(alt: number): Promise<boolean> {
     this.send(encodeTakeoff(alt));
     const ack = await this.recv('COMMAND_ACK', 5000);
     if (ack && ack.type === 'COMMAND_ACK') {
       this.print(`takeoff ${alt}m: ${ack.resultText}`);
-    } else {
-      this.print('takeoff: no response');
+      return ack.result === 0;
     }
+    this.print('takeoff: no response');
+    return false;
   }
 
   goto(north: number, east: number, up: number): void {

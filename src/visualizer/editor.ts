@@ -93,9 +93,9 @@ function droneCompletions(context: CompletionContext) {
 }
 
 const DEFAULT_PROGRAM = `// Fly a simple mission
-await drone.mode('guided')
-await drone.arm()
-await drone.takeoff(10)
+if (!await drone.mode('guided')) throw 'mode change failed'
+if (!await drone.arm()) throw 'arming failed'
+if (!await drone.takeoff(10)) throw 'takeoff failed'
 
 // Wait until we reach target altitude
 while (true) {
@@ -273,7 +273,7 @@ export class ProgramEditor {
         this.statusEl.textContent = 'Stopped';
         this.statusEl.className = 'stopped';
       } else {
-        this.printFn(`Error: ${e.message}`);
+        this.printFn(`Error: ${e.message ?? e}`);
         this.statusEl.textContent = 'Error';
         this.statusEl.className = 'error';
       }
