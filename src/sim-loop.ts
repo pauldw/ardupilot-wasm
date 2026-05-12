@@ -9,6 +9,7 @@ import { DroneModel } from './visualizer/drone-model';
 import { CameraController } from './visualizer/camera';
 import { HUD } from './visualizer/hud';
 import { PipCamera } from './visualizer/pip-camera';
+import { YoloDetector } from './visualizer/yolo-detector';
 import { Manipulator } from './visualizer/manipulator';
 import { ArduPilotBridge } from './wasm/ardupilot-bridge';
 import { encodeHeartbeat, encodeFrame, MavlinkParser } from './mavlink/mavlink';
@@ -35,6 +36,7 @@ export class SimLoop {
   private running = true;
   private physicsPaused = false;
 
+  yoloDetector: YoloDetector;
   private bridge: ArduPilotBridge | null = null;
   private wasmMode = false;
   private mavParser = new MavlinkParser();
@@ -49,6 +51,12 @@ export class SimLoop {
     this.scene = createScene();
     this.drone = new DroneModel(this.scene.scene);
     this.pipCamera = new PipCamera();
+    this.yoloDetector = new YoloDetector(
+      this.pipCamera.fboWidth, this.pipCamera.fboHeight,
+      this.pipCamera.width, this.pipCamera.height,
+      12,
+    );
+    this.yoloDetector.load('/yolov8n/model.json');
     this.cameraCtrl = new CameraController(
       this.scene.camera,
       this.scene.renderer.domElement
@@ -268,11 +276,7 @@ export class SimLoop {
 
     this.manipulator.update();
     this.cameraCtrl.controls.enabled = !this.manipulator.isGrabbing;
-    if (!this.manipulator.isShiftHeld) {
-      this.cameraCtrl.update(this.body.position);
-    } else {
-      this.cameraCtrl.controls.update();
-    }
+    this.cameraCtrl.update(this.body.position);
 
     this.hud.update({
       altitude: this.body.altitude,
@@ -295,6 +299,11 @@ export class SimLoop {
       this.body.position,
       this.body.rotationMatrix,
       this.gimbalServo.angleDeg,
+    );
+
+    // Run YOLO detection on PIP FBO (~5Hz)
+    this.yoloDetector.maybeRun(
+      this.scene.renderer, this.pipCamera.fbo, performance.now(),
     );
 
     // Main scene render

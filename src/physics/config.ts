@@ -62,7 +62,7 @@ export const CAMERA_SENSOR_DIAG_MM = 4.5;
 export const CAMERA_DISTORTION_K1 = -0.15;
 export const CAMERA_DISTORTION_K2 = 0.04;
 export const CAMERA_MOUNT_POS: [number, number, number] = [0.08, 0.0, -0.01]; // body NED [m]
-export const CAMERA_PIP_WIDTH = 320;
+export const CAMERA_PIP_WIDTH = 400;
 
 // Gimbal servo (SG90-style)
 export const GIMBAL_SERVO_CHANNEL = 8; // SERVO9 in ArduPilot (0-indexed)

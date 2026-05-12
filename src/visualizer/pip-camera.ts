@@ -154,6 +154,12 @@ export class PipCamera {
     return { scene, camera };
   }
 
+  get fbo(): THREE.WebGLRenderTarget { return this.renderTarget; }
+  get width(): number { return this.pipW; }
+  get height(): number { return this.pipH; }
+  get fboWidth(): number { return RENDER_W; }
+  get fboHeight(): number { return RENDER_H; }
+
   renderToFBO(
     renderer: THREE.WebGLRenderer,
     scene: THREE.Scene,
