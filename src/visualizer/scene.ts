@@ -30,7 +30,7 @@ function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lo
   });
   splat.rotation.x = Math.PI;
   splat.scale.setScalar(4);
-  splat.position.y = -1.7;
+  splat.position.set(-3, -1.7, 0);
   splat.frustumCulled = false;
   targetScene.add(splat);
 }
