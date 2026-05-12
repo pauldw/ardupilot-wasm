@@ -3,10 +3,11 @@ import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { Terrain } from './terrain';
 import { Environment } from './environment';
 
-function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene) {
+function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lodSplatCount?: number) {
   const spark = new SparkRenderer({
     renderer,
     focalAdjustment: 2.0,
+    ...(lodSplatCount != null && { lodSplatCount }),
   });
   targetScene.add(spark);
 
@@ -75,11 +76,11 @@ export function createScene(): {
   const sky = createSkyAndLights(scene);
   createSplat(renderer, scene);
 
-  // Separate PIP scene with its own splat sort order
+  // Separate PIP scene with its own splat sort order and lower LOD budget
   const pipScene = new THREE.Scene();
   pipScene.fog = new THREE.Fog(0x87ceeb, 200, 2500);
   createSkyAndLights(pipScene);
-  createSplat(renderer, pipScene);
+  createSplat(renderer, pipScene, 500_000);
 
   const terrain = new Terrain(scene);
   terrain.setRenderer(renderer);
