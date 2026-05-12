@@ -16,6 +16,7 @@ em++ -O2 \
   -s MODULARIZE=1 -s "EXPORT_NAME=ArduPilotModule" -s ASYNCIFY_STACK_SIZE=65536 \
   -s FILESYSTEM=1 -s FORCE_FILESYSTEM=1 \
   -s ERROR_ON_UNDEFINED_SYMBOLS=0 \
+  -Wl,--allow-undefined \
   -s INVOKE_RUN=0 \
   -o "$OUT/ardupilot.js" \
   $(cat "$OUT/link_files2.txt") 2>&1

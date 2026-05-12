@@ -19,6 +19,7 @@ INCLUDES := \
 	-I$(ARDUPILOT) \
 	-I$(WASM_BUILD)/hal \
 	-I$(WASM_BUILD)/glue \
+	-I$(WASM_BUILD)/build/generated \
 	-include $(WASM_CONFIG)
 
 # Compiler flags
@@ -30,6 +31,7 @@ CXXFLAGS := \
 	-DARDUPILOT_BUILD \
 	-DSKETCH_MAIN=ArduCopter_main \
 	-DAP_SIM_ENABLED=1 \
+	-D__AP_LINE__=__LINE__ \
 	-Wno-unused-private-field \
 	-Wno-unused-variable \
 	-Wno-unused-function \
@@ -104,12 +106,19 @@ COPTER_SRCS := \
 	$(ARDUPILOT)/ArduCopter/UserParameters.cpp \
 	$(ARDUPILOT)/ArduCopter/tuning.cpp
 
+# AP_Mount (servo gimbal support)
+MOUNT_SRCS := \
+	$(ARDUPILOT)/libraries/AP_Mount/AP_Mount.cpp \
+	$(ARDUPILOT)/libraries/AP_Mount/AP_Mount_Backend.cpp \
+	$(ARDUPILOT)/libraries/AP_Mount/AP_Mount_Params.cpp \
+	$(ARDUPILOT)/libraries/AP_Mount/AP_Mount_Servo.cpp
+
 # WASM HAL and glue
 WASM_SRCS := \
 	$(WASM_BUILD)/glue/wasm_entry.cpp
 
 # All sources
-ALL_SRCS := $(COPTER_SRCS) $(WASM_SRCS)
+ALL_SRCS := $(COPTER_SRCS) $(MOUNT_SRCS) $(WASM_SRCS)
 ALL_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(notdir $(ALL_SRCS)))
 
 # Output

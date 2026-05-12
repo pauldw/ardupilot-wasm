@@ -216,6 +216,22 @@ export class Drone {
     this.send(encodeCommandLong(command, p1, p2, p3, p4, p5, p6, p7));
   }
 
+  async gimbal_pitch(angleDeg: number): Promise<void> {
+    // MAV_CMD_DO_MOUNT_CONTROL (205): p1=pitch(deg), p2=roll(deg), p3=yaw(deg), p7=MAV_MOUNT_MODE
+    this.send(encodeCommandLong(205, angleDeg, 0, 0, 0, 0, 0, 2));
+    this.print(`gimbal pitch: ${angleDeg}°`);
+  }
+
+  get gimbal_angle(): number {
+    return this.sim.gimbalServo.angleDeg;
+  }
+
+  gimbal_debug(): void {
+    const pwm = this.sim.lastGimbalPwm;
+    const angle = this.sim.gimbalServo.angleDeg;
+    this.print(`gimbal: pwm=${pwm}, servo_angle=${angle.toFixed(1)}°`);
+  }
+
   async sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -242,6 +258,10 @@ Telemetry:
   await drone.get_attitude()  Get roll/pitch/yaw
   await drone.get_battery()   Get battery status
   await drone.get_home()      Get home position
+
+Camera gimbal:
+  await drone.gimbal_pitch(-45)  Tilt camera down 45°
+  drone.gimbal_angle              Get current gimbal angle
 
 Parameters:
   await drone.param_get('ARMING_CHECK')   Read parameter

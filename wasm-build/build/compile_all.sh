@@ -203,6 +203,13 @@ compile_dir "OTHER" "Other needed libs" \
     $(find "$ARDUPILOT/libraries/AP_ROMFS" -name "*.cpp") \
     "$ARDUPILOT/libraries/AP_OLC/AP_OLC.cpp"
 
+# Camera Mount (servo gimbal)
+compile_dir "MOUNT" "AP_Mount" \
+    "$ARDUPILOT/libraries/AP_Mount/AP_Mount.cpp" \
+    "$ARDUPILOT/libraries/AP_Mount/AP_Mount_Backend.cpp" \
+    "$ARDUPILOT/libraries/AP_Mount/AP_Mount_Params.cpp" \
+    "$ARDUPILOT/libraries/AP_Mount/AP_Mount_Servo.cpp"
+
 # ArduCopter
 compile_dir "COPTER" "ArduCopter" \
     $(find "$ARDUPILOT/ArduCopter" -name "*.cpp")

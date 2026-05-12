@@ -3,10 +3,12 @@ import { MotorSet } from './physics/motor';
 import { MuJoCoBody } from './physics/mujoco-body';
 import { quatToEuler } from './physics/rigid-body';
 import { Wind } from './physics/wind';
+import { ServoModel } from './physics/servo';
 import { createScene } from './visualizer/scene';
 import { DroneModel } from './visualizer/drone-model';
 import { CameraController } from './visualizer/camera';
 import { HUD } from './visualizer/hud';
+import { PipCamera } from './visualizer/pip-camera';
 import { Manipulator } from './visualizer/manipulator';
 import { ArduPilotBridge } from './wasm/ardupilot-bridge';
 import { encodeHeartbeat, encodeFrame, MavlinkParser } from './mavlink/mavlink';
@@ -16,6 +18,7 @@ export class SimLoop {
   body: MuJoCoBody;
   motors: MotorSet;
   wind: Wind;
+  gimbalServo: ServoModel;
   simTime = 0;
 
   get terrain() { return this.scene.terrain; }
@@ -23,8 +26,10 @@ export class SimLoop {
   private drone: DroneModel;
   private cameraCtrl: CameraController;
   private hud: HUD;
+  private pipCamera: PipCamera;
   private manipulator: Manipulator;
   private pwmValues = [1000, 1000, 1000, 1000];
+  lastGimbalPwm = 0;
   private mode = 'STABILIZE';
   private armed = false;
   private running = true;
@@ -39,9 +44,11 @@ export class SimLoop {
     this.body = new MuJoCoBody();
     this.motors = new MotorSet();
     this.wind = new Wind(2, 45, 1.0, 1.0);
+    this.gimbalServo = new ServoModel();
 
     this.scene = createScene();
     this.drone = new DroneModel(this.scene.scene);
+    this.pipCamera = new PipCamera();
     this.cameraCtrl = new CameraController(
       this.scene.camera,
       this.scene.renderer.domElement
@@ -95,6 +102,11 @@ export class SimLoop {
 
         this.motors.setPwm(this.armed ? this.pwmValues : [1000, 1000, 1000, 1000]);
         this.motors.update(C.PHYSICS_DT);
+
+        // Update gimbal servo from ArduPilot mount output
+        const gimbalPwm = pwm[C.GIMBAL_SERVO_CHANNEL] || 1500;
+        this.lastGimbalPwm = gimbalPwm;
+        this.gimbalServo.update(gimbalPwm, C.PHYSICS_DT);
 
         const { force, torque } = this.motors.getForcesAndTorques();
         const windVel = this.wind.getVelocity(this.simTime);
@@ -275,7 +287,21 @@ export class SimLoop {
     });
 
     this.scene.sky.position.copy(this.scene.camera.position);
+
+    // Render PIP camera to its FBO (doesn't touch screen yet)
+    this.pipCamera.renderToFBO(
+      this.scene.renderer,
+      this.scene.scene,
+      this.body.position,
+      this.body.rotationMatrix,
+      this.gimbalServo.angleDeg,
+    );
+
+    // Main scene render
     this.scene.renderer.render(this.scene.scene, this.scene.camera);
+
+    // PIP overlay on top of main scene
+    this.pipCamera.renderOverlay(this.scene.renderer);
   }
 
   startRenderLoop(): void {

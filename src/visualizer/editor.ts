@@ -32,6 +32,8 @@ const DRONE_COMPLETIONS: Completion[] = [
   { label: 'drone.recv(\'type\', timeout)', type: 'method', detail: 'Wait for MAVLink message' },
   { label: 'drone.send(data)', type: 'method', detail: 'Send raw MAVLink' },
   { label: 'drone.command_long(cmd, p1, p2, p3, p4, p5, p6, p7)', type: 'method', detail: 'Send COMMAND_LONG' },
+  { label: 'drone.gimbal_pitch(-45)', type: 'method', detail: 'Tilt camera down' },
+  { label: 'drone.gimbal_angle', type: 'property', detail: 'Current gimbal angle' },
   { label: 'drone.help()', type: 'method', detail: 'Show help' },
 ];
 

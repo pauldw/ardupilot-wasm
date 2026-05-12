@@ -122,6 +122,14 @@ export class ArduPilotBridge {
       'INS_ACC2SCAL_X 1.001',
       'INS_ACC2SCAL_Y 1.001',
       'INS_ACC2SCAL_Z 1.001',
+      // Camera gimbal mount (servo-based, pitch only)
+      'MNT1_TYPE 1',
+      'MNT1_PITCH_MIN -90',
+      'MNT1_PITCH_MAX 90',
+      'MNT1_DEFLT_MODE 1',
+      'SERVO9_FUNCTION 7',
+      'SERVO9_MIN 1000',
+      'SERVO9_MAX 2000',
     ].join('\n');
 
     this.module.FS.writeFile('/defaults.parm', defaults);

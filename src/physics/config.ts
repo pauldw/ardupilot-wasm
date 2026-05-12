@@ -53,3 +53,26 @@ export const HOME_LAT = -35.363261;
 export const HOME_LON = 149.165230;
 export const HOME_ALT = 584.0;
 export const HOME_YAW = 353.0;
+
+// Camera (OpenMV N6 stock lens)
+export const CAMERA_RES_X = 1280;
+export const CAMERA_RES_Y = 800;
+export const CAMERA_FOCAL_MM = 2.8;
+export const CAMERA_SENSOR_DIAG_MM = 4.5;
+export const CAMERA_DISTORTION_K1 = -0.15;
+export const CAMERA_DISTORTION_K2 = 0.04;
+export const CAMERA_MOUNT_POS: [number, number, number] = [0.08, 0.0, -0.01]; // body NED [m]
+export const CAMERA_PIP_WIDTH = 320;
+
+// Gimbal servo (SG90-style)
+export const GIMBAL_SERVO_CHANNEL = 8; // SERVO9 in ArduPilot (0-indexed)
+export const GIMBAL_PITCH_MIN = -90.0; // degrees
+export const GIMBAL_PITCH_MAX = 90.0;
+export const GIMBAL_PWM_MIN = 1000.0;
+export const GIMBAL_PWM_MAX = 2000.0;
+export const SERVO_MAX_SPEED = 500.0; // deg/s
+export const SERVO_NATURAL_FREQ = 35.0; // rad/s
+export const SERVO_DAMPING_RATIO = 0.5;
+export const SERVO_DEADBAND_US = 5.0;
+export const SERVO_BACKLASH_DEG = 1.0;
+export const SERVO_JITTER_STD_DEG = 0.08;
