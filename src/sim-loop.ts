@@ -181,6 +181,7 @@ export class SimLoop {
     }
   }
 
+
   setPwm(values: number[]): void {
     if (!this.wasmMode) {
       this.pwmValues = values;

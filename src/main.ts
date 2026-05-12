@@ -2,7 +2,8 @@ import { SimLoop } from './sim-loop';
 import { Drone } from './drone';
 import { World } from './world';
 import { ProgramEditor } from './visualizer/editor';
-import { registerAsset, startAsset, completeAsset } from './loading';
+import { registerAsset, startAsset, completeAsset, updateAssetPercent } from './loading';
+import { encodeParamSet } from './mavlink/mavlink';
 
 const sim = new SimLoop();
 
@@ -36,9 +37,14 @@ editor.bind(drone, sim, world);
 (window as any).world = world;
 (window as any).sim = sim;
 
+let ekfReady = false;
+
 sim.onMavlinkMessage = (msg) => {
   if (msg.type === 'STATUSTEXT') {
     print(`[AP] ${msg.text}`);
+    if (msg.text.includes('EKF3 IMU0 is using GPS')) {
+      ekfReady = true;
+    }
   }
 };
 
@@ -149,18 +155,35 @@ sim.initPhysics(print).then(async () => {
   completeAsset('mujoco');
   sim.startRenderLoop();
 
-  print('Letting drone settle...');
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  sim.pausePhysics();
-  sim.body.resetToLevel();
-  sim.simTime = 0;
-
   print('Loading ArduPilot WASM...');
   startAsset('ardupilot');
   const ok = await sim.initWasm(print);
   completeAsset('ardupilot');
   if (ok) {
+    registerAsset('ekf', 'EKF Initialization');
+    startAsset('ekf');
+
+    const EKF_EXPECTED_TIME = 38;
+    const startSimTime = sim.simTime;
+    await new Promise<void>((resolve) => {
+      const poll = () => {
+        if (ekfReady) {
+          completeAsset('ekf');
+          resolve();
+          return;
+        }
+        const elapsed = sim.simTime - startSimTime;
+        const pct = Math.min(99, (elapsed / EKF_EXPECTED_TIME) * 100);
+        updateAssetPercent('ekf', pct);
+        setTimeout(poll, 50);
+      };
+      poll();
+    });
+
+    sim.sendMavlink(encodeParamSet('SIM_SPEEDUP', 1));
+    sim.body.resetToLevel();
+    sim.simTime = 0;
+
     print('ArduPilot flight controller active');
     print('Type drone.help() for commands, or any JavaScript');
     print('Quick start: await drone.mode("guided")');

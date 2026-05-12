@@ -54,6 +54,15 @@ export function updateAsset(id: string, loaded: number, total: number): void {
   }
 }
 
+export function updateAssetPercent(id: string, pct: number): void {
+  const item = items.get(id);
+  if (!item) return;
+  item.el.classList.remove('indeterminate');
+  const clamped = Math.min(100, Math.max(0, pct));
+  item.fill.style.width = `${clamped}%`;
+  item.status.textContent = `${Math.round(clamped)}%`;
+}
+
 export function startAsset(id: string): void {
   const item = items.get(id);
   if (!item) return;
@@ -76,9 +85,11 @@ function checkAllDone(): void {
   for (const item of items.values()) {
     if (!item.done) return;
   }
-  screen.classList.add('fade-out');
-  setTimeout(() => { screen.style.display = 'none'; }, 600);
-  allDoneResolve?.();
+  setTimeout(() => {
+    screen.classList.add('fade-out');
+    setTimeout(() => { screen.style.display = 'none'; }, 600);
+    allDoneResolve?.();
+  }, 300);
 }
 
 export function waitForAll(): Promise<void> {

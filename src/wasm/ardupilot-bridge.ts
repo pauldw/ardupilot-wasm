@@ -65,6 +65,11 @@ export class ArduPilotBridge {
       locateFile: (path: string) => import.meta.env.BASE_URL + path,
       print: (text: string) => {
         console.log('[AP]', text);
+        if (text.startsWith('JSON received') ||
+            text.match(/^\s+(timestamp|latitude|longitude|altitude|imu|position|attitude|velocity)/) ||
+            text.startsWith('Detected physics reset')) {
+          return;
+        }
         log(text);
       },
       printErr: (text: string) => {
@@ -109,6 +114,7 @@ export class ArduPilotBridge {
       'EK3_MAG_CAL 2',
       'EK3_GBIAS_P_NSE 0.001',
       'GPS_AUTO_CONFIG 0',
+      'SIM_SPEEDUP 50',
       // Mark accelerometers as calibrated
       'INS_ACCOFFS_X 0.001',
       'INS_ACCOFFS_Y 0.001',
