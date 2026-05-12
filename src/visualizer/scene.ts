@@ -36,14 +36,14 @@ function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lo
 }
 
 function createSkyAndLights(targetScene: THREE.Scene, trackProgress: boolean): THREE.Mesh {
-  const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
-  sunLight.position.set(50, 80, 30);
+  const sunLight = new THREE.DirectionalLight(0xffeedd, 1.5);
+  sunLight.position.set(80, 30, 10);
   targetScene.add(sunLight);
 
-  const ambientLight = new THREE.AmbientLight(0x6688aa, 0.6);
+  const ambientLight = new THREE.AmbientLight(0x446688, 0.15);
   targetScene.add(ambientLight);
 
-  const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x556633, 0.4);
+  const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x556633, 0.1);
   targetScene.add(hemisphereLight);
 
   const id = 'sky-texture';

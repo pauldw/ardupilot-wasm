@@ -75,7 +75,7 @@ export class DroneModel {
           if ((child as THREE.Mesh).isMesh) {
             const mat = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
             if (mat.isMeshStandardMaterial) {
-              mat.envMapIntensity = 0.6;
+              mat.envMapIntensity = 0.15;
             }
           }
         });
