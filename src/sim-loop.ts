@@ -21,7 +21,6 @@ export class SimLoop {
   gimbalServo: ServoModel;
   simTime = 0;
 
-  get terrain() { return this.scene.terrain; }
   private scene: ReturnType<typeof createScene>;
   private pipDrone: DroneModel;
   private drone: DroneModel;
@@ -63,31 +62,10 @@ export class SimLoop {
       this.body,
     );
 
-    // Connect terrain and colliders to physics
-    this.body.groundHeightNED = (north, east) =>
-      -this.scene.terrain.getHeightNED(north, east);
-    this.body.collisionCheck = (north, east, down) =>
-      this.scene.environment.checkCollision(north, east, down);
-
-    this.scene.terrain.onHeightDataChanged = () => {
-      this.body.setHeightfieldData({
-        heightmap: this.scene.terrain.heightData,
-        size: this.scene.terrain.size,
-        segments: this.scene.terrain.segments,
-      });
-    };
-
   }
 
   async initPhysics(onLog?: (msg: string) => void): Promise<void> {
-    await this.body.init(
-      {
-        heightmap: this.scene.terrain.heightData,
-        size: this.scene.terrain.size,
-        segments: this.scene.terrain.segments,
-      },
-      onLog,
-    );
+    await this.body.init(undefined, onLog);
   }
 
   async initWasm(onLog?: (msg: string) => void): Promise<boolean> {

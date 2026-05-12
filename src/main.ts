@@ -143,9 +143,7 @@ print('ArduPilot WASM Simulator - JavaScript Console');
 sim.initPhysics(print).then(async () => {
   sim.startRenderLoop();
 
-  print('Waiting for terrain to load...');
-  await sim.terrain.ready;
-  print('Terrain ready, letting drone settle...');
+  print('Letting drone settle...');
   await new Promise(resolve => setTimeout(resolve, 1000));
 
   // Stop standalone physics so the drone doesn't bounce while WASM loads

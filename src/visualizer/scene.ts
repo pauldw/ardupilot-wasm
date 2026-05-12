@@ -4,8 +4,6 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
-import { Terrain } from './terrain';
-import { Environment } from './environment';
 
 function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lodSplatCount?: number) {
   const spark = new SparkRenderer({
@@ -57,8 +55,6 @@ export function createScene(): {
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   composer: EffectComposer;
-  terrain: Terrain;
-  environment: Environment;
   sky: THREE.Mesh;
 } {
   const scene = new THREE.Scene();
@@ -100,10 +96,6 @@ export function createScene(): {
   createSkyAndLights(pipScene);
   createSplat(renderer, pipScene, 500_000);
 
-  const terrain = new Terrain(scene);
-  terrain.setRenderer(renderer);
-  const environment = new Environment(scene, terrain);
-
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -116,5 +108,5 @@ export function createScene(): {
     );
   });
 
-  return { scene, pipScene, camera, renderer, composer, terrain, environment, sky };
+  return { scene, pipScene, camera, renderer, composer, sky };
 }
