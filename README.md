@@ -4,6 +4,8 @@ A browser-based drone flight simulator running the real ArduPilot flight control
 
 **Live demo: [fvml.ca/ardupilot-wasm](https://fvml.ca/ardupilot-wasm)**
 
+https://github.com/user-attachments/assets/21e69ca7-be1e-4c0a-95d6-b40ae6f45773
+
 ## Quick Start
 
 ```bash
