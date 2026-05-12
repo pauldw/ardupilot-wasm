@@ -2,6 +2,7 @@ import { SimLoop } from './sim-loop';
 import { Drone } from './drone';
 import { World } from './world';
 import { ProgramEditor } from './visualizer/editor';
+import { registerAsset, startAsset, completeAsset } from './loading';
 
 const sim = new SimLoop();
 
@@ -140,19 +141,25 @@ cmdInput.addEventListener('keydown', (e) => {
 
 print('ArduPilot WASM Simulator - JavaScript Console');
 
+registerAsset('mujoco', 'MuJoCo Physics');
+registerAsset('ardupilot', 'ArduPilot Init');
+startAsset('mujoco');
+
 sim.initPhysics(print).then(async () => {
+  completeAsset('mujoco');
   sim.startRenderLoop();
 
   print('Letting drone settle...');
   await new Promise(resolve => setTimeout(resolve, 1000));
 
-  // Stop standalone physics so the drone doesn't bounce while WASM loads
   sim.pausePhysics();
   sim.body.resetToLevel();
   sim.simTime = 0;
 
   print('Loading ArduPilot WASM...');
+  startAsset('ardupilot');
   const ok = await sim.initWasm(print);
+  completeAsset('ardupilot');
   if (ok) {
     print('ArduPilot flight controller active');
     print('Type drone.help() for commands, or any JavaScript');
@@ -161,6 +168,8 @@ sim.initPhysics(print).then(async () => {
     print('Running in standalone physics mode');
   }
 }).catch((e) => {
+  completeAsset('mujoco');
+  completeAsset('ardupilot');
   print(`MuJoCo init failed: ${e}. Physics unavailable.`);
   console.error('MuJoCo init failed:', e);
 });

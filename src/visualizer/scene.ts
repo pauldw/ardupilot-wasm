@@ -4,6 +4,9 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
+import { registerAsset, updateAsset, completeAsset } from '../loading';
+
+let splatCount = 0;
 
 function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lodSplatCount?: number) {
   const spark = new SparkRenderer({
@@ -14,8 +17,16 @@ function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lo
   });
   targetScene.add(spark);
 
+  const id = `splat-${splatCount++}`;
+  const isMain = splatCount === 1;
+  if (isMain) registerAsset(id, 'Gaussian Splat');
+
   const splat = new SplatMesh({
     url: `${import.meta.env.BASE_URL}models/splat.sog`,
+    onProgress: isMain ? (e: ProgressEvent) => {
+      updateAsset(id, e.loaded, e.total);
+    } : undefined,
+    onLoad: isMain ? () => { completeAsset(id); } : undefined,
   });
   splat.rotation.x = Math.PI;
   splat.scale.setScalar(4);
@@ -24,7 +35,7 @@ function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lo
   targetScene.add(splat);
 }
 
-function createSkyAndLights(targetScene: THREE.Scene): THREE.Mesh {
+function createSkyAndLights(targetScene: THREE.Scene, trackProgress: boolean): THREE.Mesh {
   const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
   sunLight.position.set(50, 80, 30);
   targetScene.add(sunLight);
@@ -35,8 +46,17 @@ function createSkyAndLights(targetScene: THREE.Scene): THREE.Mesh {
   const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x556633, 0.4);
   targetScene.add(hemisphereLight);
 
+  const id = 'sky-texture';
+  if (trackProgress) registerAsset(id, 'Sky Panorama');
+
   const loader = new THREE.TextureLoader();
-  const skyTex = loader.load(`${import.meta.env.BASE_URL}textures/sky_panorama.jpg`);
+  const skyUrl = `${import.meta.env.BASE_URL}textures/sky_panorama.jpg`;
+
+  const skyTex = loader.load(
+    skyUrl,
+    () => { if (trackProgress) completeAsset(id); },
+    trackProgress ? (e: ProgressEvent) => { updateAsset(id, e.loaded, e.total); } : undefined,
+  );
   skyTex.mapping = THREE.EquirectangularReflectionMapping;
   targetScene.environment = skyTex;
   const skyGeo = new THREE.SphereGeometry(4000, 32, 16);
@@ -77,7 +97,6 @@ export function createScene(): {
   renderer.setClearColor(0x000000, 1);
   document.getElementById('canvas-container')!.appendChild(renderer.domElement);
 
-  // FXAA post-processing (cheap screen-space AA for mesh edges)
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const fxaaPass = new ShaderPass(FXAAShader);
@@ -88,12 +107,11 @@ export function createScene(): {
   );
   composer.addPass(fxaaPass);
 
-  const sky = createSkyAndLights(scene);
+  const sky = createSkyAndLights(scene, true);
   createSplat(renderer, scene);
 
-  // Separate PIP scene with its own splat sort order and lower LOD budget
   const pipScene = new THREE.Scene();
-  createSkyAndLights(pipScene);
+  createSkyAndLights(pipScene, false);
   createSplat(renderer, pipScene, 500_000);
 
   window.addEventListener('resize', () => {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as C from '../physics/config';
+import { registerAsset, updateAsset, completeAsset } from '../loading';
 
 const PROP_NAMES_TO_MOTOR: Record<string, number> = {
   'Front Right Propeller': 0,
@@ -14,6 +15,7 @@ const PROP_NAMES_TO_MOTOR: Record<string, number> = {
 };
 
 export class DroneModel {
+  private static tracked = false;
   group: THREE.Group;
   private propellers: (THREE.Object3D | null)[] = [null, null, null, null];
   private propAngles = [0, 0, 0, 0];
@@ -26,6 +28,11 @@ export class DroneModel {
   }
 
   private _loadModel(): void {
+    const track = !DroneModel.tracked;
+    if (track) {
+      DroneModel.tracked = true;
+      registerAsset('drone', 'Drone Model');
+    }
     const loader = new GLTFLoader();
     loader.load(
       'drone.glb',
@@ -66,11 +73,12 @@ export class DroneModel {
 
         this.group.add(model);
         this.loaded = true;
+        if (track) completeAsset('drone');
 
         console.log('[DroneModel] GLB loaded, propellers found:',
           this.propellers.map((p, i) => `${i}: ${p ? p.name : 'MISSING'}`).join(', '));
       },
-      undefined,
+      track ? (e: ProgressEvent) => { updateAsset('drone', e.loaded, e.total); } : undefined,
       (err) => {
         console.error('[DroneModel] Failed to load drone.glb:', err);
       }
