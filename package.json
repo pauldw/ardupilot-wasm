@@ -16,7 +16,6 @@
     "@codemirror/theme-one-dark": "^6.1.3",
     "@mujoco/mujoco": "^3.8.1",
     "@sparkjsdev/spark": "^2.0.0",
-    "@tensorflow/tfjs": "^4.22.0",
     "@types/three": "^0.184.1",
     "codemirror": "^6.0.2",
     "three": "^0.184.0",

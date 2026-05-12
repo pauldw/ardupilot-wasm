@@ -9,7 +9,6 @@ import { DroneModel } from './visualizer/drone-model';
 import { CameraController } from './visualizer/camera';
 import { HUD } from './visualizer/hud';
 import { PipCamera } from './visualizer/pip-camera';
-import { YoloDetector } from './visualizer/yolo-detector';
 import { Manipulator } from './visualizer/manipulator';
 import { ArduPilotBridge } from './wasm/ardupilot-bridge';
 import { encodeHeartbeat, encodeFrame, MavlinkParser } from './mavlink/mavlink';
@@ -37,7 +36,6 @@ export class SimLoop {
   private running = true;
   private physicsPaused = false;
 
-  yoloDetector: YoloDetector;
   private bridge: ArduPilotBridge | null = null;
   private wasmMode = false;
   private mavParser = new MavlinkParser();
@@ -53,12 +51,6 @@ export class SimLoop {
     this.drone = new DroneModel(this.scene.scene);
     this.pipDrone = new DroneModel(this.scene.pipScene);
     this.pipCamera = new PipCamera();
-    this.yoloDetector = new YoloDetector(
-      this.pipCamera.fboWidth, this.pipCamera.fboHeight,
-      this.pipCamera.width, this.pipCamera.height,
-      12,
-    );
-    this.yoloDetector.load(`${import.meta.env.BASE_URL}yolov8n/model.json`);
     this.cameraCtrl = new CameraController(
       this.scene.camera,
       this.scene.renderer.domElement
@@ -315,10 +307,6 @@ export class SimLoop {
     // PIP overlay on top of main scene
     this.pipCamera.renderOverlay(this.scene.renderer);
 
-    // Run YOLO detection on PIP FBO (~5Hz)
-    this.yoloDetector.maybeRun(
-      this.scene.renderer, this.pipCamera.fbo, performance.now(),
-    );
   }
 
   startRenderLoop(): void {
