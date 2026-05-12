@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/drone-fiddle/' : '/',
+  base: command === 'build' ? '/ardupilot-wasm/' : '/',
   server: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
