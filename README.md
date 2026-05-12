@@ -136,6 +136,10 @@ bash wasm-build/build/rebuild_changed.sh HAL_SITL_Class SITL_State Socket_wasm
 5. **MAVLink**: Commands are encoded as MAVLink v2 frames and written to a ring buffer UART bridge; ArduPilot responses flow back through the same bridge
 6. **Rendering**: Three.js renders the Gaussian splat environment and drone model at 60fps via EffectComposer (FXAA). PIP camera renders independently with barrel distortion
 
+## Credits
+
+- Gaussian splat scene: [Country Hotel Le Querce, Italy](https://superspl.at/scene/8f4c0957) via SuperSplat
+
 ## License
 
 ArduPilot components are licensed under GPL v3. See the [ArduPilot repository](https://github.com/ArduPilot/ardupilot) for details.
