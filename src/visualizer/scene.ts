@@ -44,7 +44,7 @@ export function createScene(): {
 
   // Sky sphere
   const loader = new THREE.TextureLoader();
-  const skyTex = loader.load('/textures/sky_panorama.jpg');
+  const skyTex = loader.load(`${import.meta.env.BASE_URL}textures/sky_panorama.jpg`);
   skyTex.mapping = THREE.EquirectangularReflectionMapping;
   const skyGeo = new THREE.SphereGeometry(4000, 32, 16);
   const skyMat = new THREE.MeshBasicMaterial({

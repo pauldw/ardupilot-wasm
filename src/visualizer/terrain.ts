@@ -30,7 +30,7 @@ export class Terrain {
     const loader = new GLTFLoader();
 
     try {
-      const gltf = await loader.loadAsync('/models/map.glb');
+      const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/map.glb`);
       this.mapGroup = gltf.scene;
 
       // Flip model right-side-up and scale to match real-world size

@@ -203,21 +203,21 @@ export class PipCamera {
   }
 
   renderOverlay(renderer: THREE.WebGLRenderer): void {
-    const fullW = renderer.domElement.width;
-    const fullH = renderer.domElement.height;
-    const pr = renderer.getPixelRatio();
-    const vpX = fullW - (PIP_MARGIN + this.pipW) * pr;
-    const vpY = fullH - (PIP_MARGIN + this.pipH) * pr;
-    const vpW = this.pipW * pr;
-    const vpH = this.pipH * pr;
+    const cssW = renderer.domElement.clientWidth;
+    const cssH = renderer.domElement.clientHeight;
+    const vpX = cssW - PIP_MARGIN - this.pipW;
+    const vpY = cssH - PIP_MARGIN - this.pipH;
 
-    renderer.setViewport(vpX, vpY, vpW, vpH);
-    renderer.setScissor(vpX, vpY, vpW, vpH);
+    renderer.setViewport(vpX, vpY, this.pipW, this.pipH);
+    renderer.setScissor(vpX, vpY, this.pipW, this.pipH);
     renderer.setScissorTest(true);
 
+    const prevAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
     renderer.render(this.distortScene, this.distortCamera);
+    renderer.autoClear = prevAutoClear;
 
-    renderer.setViewport(0, 0, fullW, fullH);
+    renderer.setViewport(0, 0, cssW, cssH);
     renderer.setScissorTest(false);
 
     this.label.textContent = `CAM ${this.hfov.toFixed(0)}° FOV | Tilt ${this.currentTilt.toFixed(1)}°`;

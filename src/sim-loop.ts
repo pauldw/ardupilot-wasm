@@ -56,7 +56,7 @@ export class SimLoop {
       this.pipCamera.width, this.pipCamera.height,
       12,
     );
-    this.yoloDetector.load('/yolov8n/model.json');
+    this.yoloDetector.load(`${import.meta.env.BASE_URL}yolov8n/model.json`);
     this.cameraCtrl = new CameraController(
       this.scene.camera,
       this.scene.renderer.domElement
@@ -301,16 +301,16 @@ export class SimLoop {
       this.gimbalServo.angleDeg,
     );
 
-    // Run YOLO detection on PIP FBO (~5Hz)
-    this.yoloDetector.maybeRun(
-      this.scene.renderer, this.pipCamera.fbo, performance.now(),
-    );
-
     // Main scene render
     this.scene.renderer.render(this.scene.scene, this.scene.camera);
 
     // PIP overlay on top of main scene
     this.pipCamera.renderOverlay(this.scene.renderer);
+
+    // Run YOLO detection on PIP FBO (~5Hz)
+    this.yoloDetector.maybeRun(
+      this.scene.renderer, this.pipCamera.fbo, performance.now(),
+    );
   }
 
   startRenderLoop(): void {

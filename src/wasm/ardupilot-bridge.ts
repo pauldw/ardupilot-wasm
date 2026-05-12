@@ -62,7 +62,7 @@ export class ArduPilotBridge {
     log('Loading ArduPilot WASM module...');
 
     this.module = await ArduPilotModule({
-      locateFile: (path: string) => '/' + path,
+      locateFile: (path: string) => import.meta.env.BASE_URL + path,
       print: (text: string) => {
         console.log('[AP]', text);
         log(text);
