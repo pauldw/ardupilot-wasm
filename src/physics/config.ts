@@ -61,7 +61,7 @@ export const CAMERA_FOCAL_MM = 2.8;
 export const CAMERA_SENSOR_DIAG_MM = 4.5;
 export const CAMERA_DISTORTION_K1 = -0.15;
 export const CAMERA_DISTORTION_K2 = 0.04;
-export const CAMERA_MOUNT_POS: [number, number, number] = [0.08, 0.0, -0.01]; // body NED [m]
+export const CAMERA_MOUNT_POS: [number, number, number] = [0.08, 0.0, -1.50]; // body NED [m]
 export const CAMERA_PIP_WIDTH = 400;
 
 // Gimbal servo (SG90-style)

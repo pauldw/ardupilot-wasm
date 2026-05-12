@@ -19,8 +19,7 @@ uniform sampler2D tScene;
 varying vec2 vUv;
 
 void main() {
-  vec4 col = texture2D(tScene, vUv);
-  gl_FragColor = col;
+  gl_FragColor = texture2D(tScene, vUv);
 }`;
 
 export class PipCamera {
@@ -40,7 +39,6 @@ export class PipCamera {
     const vfovRad = 2 * Math.atan(sensorH / (2 * C.CAMERA_FOCAL_MM));
     const vfovDeg = vfovRad * 180 / Math.PI;
 
-    this.camera = new THREE.PerspectiveCamera(vfovDeg, aspect, 0.1, 5000);
     this.pipW = C.CAMERA_PIP_WIDTH;
     this.pipH = Math.round(C.CAMERA_PIP_WIDTH / aspect);
     this.hfov = 2 * Math.atan(sensorH * aspect / (2 * C.CAMERA_FOCAL_MM)) * 180 / Math.PI;
@@ -50,15 +48,21 @@ export class PipCamera {
       magFilter: THREE.LinearFilter,
     });
 
-    const { scene, camera } = this.buildDistortionPass();
+    const { scene, camera, overrender } = this.buildDistortionPass();
     this.distortScene = scene;
     this.distortCamera = camera;
+
+    // Widen FBO camera FOV to cover barrel distortion overshoot at edges
+    const overVfovRad = 2 * Math.atan(Math.tan(vfovRad / 2) * overrender);
+    this.camera = new THREE.PerspectiveCamera(
+      overVfovRad * 180 / Math.PI, aspect, 0.1, 5000,
+    );
 
     this.label = document.createElement('div');
     this.label.id = 'pip-label';
     Object.assign(this.label.style, {
       position: 'fixed',
-      top: `${PIP_MARGIN + this.pipH - 18}px`,
+      top: `${PIP_MARGIN + this.pipH}px`,
       right: `${PIP_MARGIN}px`,
       width: `${this.pipW}px`,
       background: 'rgba(0,0,0,0.7)',
@@ -77,12 +81,15 @@ export class PipCamera {
   private buildDistortionPass() {
     const geometry = new THREE.BufferGeometry();
     const positions: number[] = [];
-    const uvs: number[] = [];
+    const rawUvs: { srcU: number; srcV: number }[] = [];
     const indices: number[] = [];
 
     const aspect = C.CAMERA_RES_X / C.CAMERA_RES_Y;
     const sensorW = C.CAMERA_SENSOR_DIAG_MM * aspect / Math.sqrt(1 + aspect * aspect);
     const sensorH = C.CAMERA_SENSOR_DIAG_MM / Math.sqrt(1 + aspect * aspect);
+
+    // First pass: compute distortion UVs and find max overshoot
+    let maxOvershoot = 1.0;
 
     for (let j = 0; j <= DISTORT_GRID_Y; j++) {
       for (let i = 0; i <= DISTORT_GRID_X; i++) {
@@ -105,9 +112,24 @@ export class PipCamera {
         const srcU = 0.5 + (u - 0.5) * scale;
         const srcV = 0.5 + (v - 0.5) * scale;
 
+        // Track how far UVs extend beyond [0,1]
+        const ovU = Math.max(Math.abs(srcU - 0.5) * 2, 0);
+        const ovV = Math.max(Math.abs(srcV - 0.5) * 2, 0);
+        maxOvershoot = Math.max(maxOvershoot, ovU, ovV);
+
         positions.push(sx, sy, 0);
-        uvs.push(srcU, srcV);
+        rawUvs.push({ srcU, srcV });
       }
+    }
+
+    // Rescale UVs so they map into the wider FBO
+    const overrender = maxOvershoot;
+    const uvs: number[] = [];
+    for (const { srcU, srcV } of rawUvs) {
+      uvs.push(
+        0.5 + (srcU - 0.5) / overrender,
+        0.5 + (srcV - 0.5) / overrender,
+      );
     }
 
     for (let j = 0; j < DISTORT_GRID_Y; j++) {
@@ -140,7 +162,7 @@ export class PipCamera {
     scene.add(mesh);
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-    return { scene, camera };
+    return { scene, camera, overrender };
   }
 
   get fbo(): THREE.WebGLRenderTarget { return this.renderTarget; }
