@@ -24,6 +24,7 @@ export class SimLoop {
 
   get terrain() { return this.scene.terrain; }
   private scene: ReturnType<typeof createScene>;
+  private pipDrone: DroneModel;
   private drone: DroneModel;
   private cameraCtrl: CameraController;
   private hud: HUD;
@@ -50,6 +51,7 @@ export class SimLoop {
 
     this.scene = createScene();
     this.drone = new DroneModel(this.scene.scene);
+    this.pipDrone = new DroneModel(this.scene.pipScene);
     this.pipCamera = new PipCamera();
     this.yoloDetector = new YoloDetector(
       this.pipCamera.fboWidth, this.pipCamera.fboHeight,
@@ -273,6 +275,12 @@ export class SimLoop {
       this.motors.omegas,
       1 / 60,
     );
+    this.pipDrone.update(
+      this.body.position,
+      this.body.rotationMatrix,
+      this.motors.omegas,
+      1 / 60,
+    );
 
     this.manipulator.update();
     this.cameraCtrl.controls.enabled = !this.manipulator.isGrabbing;
@@ -292,10 +300,10 @@ export class SimLoop {
 
     this.scene.sky.position.copy(this.scene.camera.position);
 
-    // Render PIP camera to its FBO (doesn't touch screen yet)
+    // Render PIP camera to its FBO using dedicated PIP scene (independent splat sort)
     this.pipCamera.renderToFBO(
       this.scene.renderer,
-      this.scene.scene,
+      this.scene.pipScene,
       this.body.position,
       this.body.rotationMatrix,
       this.gimbalServo.angleDeg,
