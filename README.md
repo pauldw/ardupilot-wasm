@@ -1,6 +1,8 @@
 # ArduPilot WASM Simulator
 
-A browser-based drone flight simulator running the real ArduPilot flight controller compiled to WebAssembly. Includes a TypeScript physics engine (F450 quadcopter model), Three.js 3D visualization, and a MAVLink command interface -- all running entirely client-side with no server required.
+A browser-based drone flight simulator running the real ArduPilot flight controller compiled to WebAssembly. Features MuJoCo physics, Gaussian splat 3D environment, PIP drone camera with barrel distortion, and a JavaScript command interface -- all running entirely client-side with no server required.
+
+**Live demo: [fvml.ca/ardupilot-wasm](https://fvml.ca/ardupilot-wasm)**
 
 ## Quick Start
 
@@ -9,74 +11,86 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser. Wait a few seconds for the EKF to initialize (you'll see GPS lock and EKF messages in the console), then:
+Open `http://localhost:5173` in your browser. A loading screen shows progress for all assets (MuJoCo physics, Gaussian splat map, drone model, ArduPilot WASM, EKF initialization). Once loaded:
 
-```
-mode guided
-arm
-takeoff 10
+```js
+await drone.mode('guided')
+await drone.arm()
+await drone.takeoff(10)
 ```
 
-The drone will arm, take off, and hold at 10 meters altitude.
+Or click **Run** in the built-in program editor to execute the default mission script.
 
 ## Architecture
 
 ```
 Browser Tab
 +-----------+     +----------+     +---------+
-| MAVLink   |     | Three.js |     | HUD     |
-| CLI Input |     | 3D Scene |     | Overlay |
+| JS Console|     | Three.js |     | HUD     |
+| + Editor  |     | 3D Scene |     | Overlay |
 +-----+-----+     +----+-----+     +---------+
       |                 |
       v                 ^ state
 +-----+-----+     +----+------+
-| ArduPilot |<--->| Physics   |
-| SITL(WASM)|     | Engine(TS)|
+| ArduPilot |<--->| MuJoCo    |
+| SITL(WASM)|     | Physics   |
 +-----+-----+     +-----------+
   servo PWM --> motor model
   sensor JSON <-- rigid body
 ```
 
-ArduPilot's flight controller runs in WASM via Emscripten. The TypeScript physics engine simulates F450 quadcopter dynamics at 1000Hz. Communication uses the same lockstep protocol as ArduPilot's native JSON SITL backend, routed through shared memory buffers instead of UDP sockets.
+ArduPilot's flight controller runs in WASM via Emscripten. MuJoCo provides rigid body physics at 1000Hz. Communication uses the same lockstep protocol as ArduPilot's native JSON SITL backend, routed through shared memory buffers instead of UDP sockets.
 
 ## Commands
 
+The console accepts any JavaScript. The `drone` object provides high-level commands:
+
 | Command | Description |
 |---------|-------------|
-| `arm [force]` | Arm motors (force bypasses preflight checks) |
-| `disarm` | Disarm motors |
-| `mode <MODE>` | Set flight mode (GUIDED, STABILIZE, ALT_HOLD, LOITER, RTL, LAND, etc.) |
-| `takeoff <alt>` | Take off to altitude in meters |
-| `goto <n> <e> <u>` | Fly to position in meters from home (north, east, up) |
-| `help` | Show available commands |
+| `await drone.mode('guided')` | Set flight mode (guided, stabilize, alt_hold, loiter, rtl, land, etc.) |
+| `await drone.arm()` | Arm motors (returns true/false) |
+| `await drone.takeoff(alt)` | Take off to altitude in meters |
+| `drone.goto(n, e, u)` | Fly to position (north, east, up) in meters from home |
+| `drone.help()` | Show all available commands |
 
-Typical flight sequence: `mode guided` -> `arm` -> `takeoff 10` -> `goto 10 5 15`
+Commands that talk to ArduPilot return `boolean` indicating success/failure.
 
 ## Project Structure
 
 ```
 src/
-  main.ts                   Entry point, command handling
-  sim-loop.ts               Render loop, WASM/physics coordination
+  main.ts                   Entry point, JS console, command history
+  sim-loop.ts               Render loop, WASM/physics lockstep coordination
+  drone.ts                  High-level drone command API
+  world.ts                  World manipulation (wind, reset, etc.)
+  loading.ts                Loading screen with per-asset progress tracking
   wasm/
     ardupilot-bridge.ts     WASM module loading, lockstep glue, sensor data
   mavlink/
-    mavlink.ts              MAVLink v2 encoder/decoder (heartbeat, arm, mode, goto, etc.)
+    mavlink.ts              MAVLink v2 encoder/decoder
   physics/
     config.ts               F450 physical parameters
     motor.ts                PWM -> thrust/torque motor model with first-order lag
-    rigid-body.ts           Quaternion rigid body dynamics, ground contact
+    mujoco-body.ts          MuJoCo rigid body wrapper
+    rigid-body.ts           Quaternion utilities, ground contact
     wind.ts                 Multi-frequency turbulence model
+    servo.ts                Servo model for gimbal
   visualizer/
-    scene.ts                Sky, ground, lighting (Three.js)
-    drone-model.ts          Procedural drone mesh with spinning props
+    scene.ts                Gaussian splat environment, sky, lighting (Three.js + Spark)
+    drone-model.ts          GLB drone model with animated propellers
     camera.ts               OrbitControls following drone
     hud.ts                  HTML overlay (altitude, speed, attitude, mode)
+    pip-camera.ts           Picture-in-picture drone camera with barrel distortion
+    editor.ts               CodeMirror program editor with run/stop controls
+    manipulator.ts          Mouse-based drone grab/move interaction
 
 public/
   ardupilot.js              Emscripten JS glue (pre-built)
   ardupilot.wasm            ArduPilot SITL binary (pre-built)
-  textures/                 Sky panorama & grass ground textures
+  drone.glb                 Drone 3D model
+  models/splat.sog          Gaussian splat environment map
+  textures/                 Sky panorama
+  environment/              MuJoCo scene XML + meshes
 
 wasm-build/
   build/
@@ -89,7 +103,6 @@ wasm-build/
     wasm_entry.cpp          Exported C functions for JS interop
     wasm_uart.cpp           Ring buffer UART bridge (MAVLink port)
     wasm_stubs.cpp          Stubs for unsupported POSIX functionality
-  hal/                      (empty -- HAL modifications are in ardupilot-wasm-src)
 ```
 
 ## WASM Build
@@ -114,23 +127,14 @@ bash wasm-build/build/link.sh
 bash wasm-build/build/rebuild_changed.sh HAL_SITL_Class SITL_State Socket_wasm
 ```
 
-### Key WASM Modifications
-
-The ArduPilot source (`ardupilot-wasm-src`) has these patches for WASM compatibility:
-
-- **HAL_SITL_Class.cpp** -- Adaptive `emscripten_sleep` batching: runs 50 iterations per browser yield before arming (fast EKF init), drops to 1:1 after arming (smooth real-time flight)
-- **UARTDriver.cpp** -- WASM UART bridge for MAVLink on port 0; GPS sim device creation for ports 3/4
-- **Socket_wasm.cpp** -- Replaces POSIX sockets with shared memory buffers for the JSON SIM backend; triggers JS callbacks on servo data output
-- **SITL_State.cpp** -- `emscripten_sleep` for cooperative scheduling in single-threaded WASM
-- **GCS_Common.cpp** -- Debug logging for GCS backend initialization
-
 ## How It Works
 
-1. **Lockstep loop**: ArduPilot's JSON SIM backend sends a servo PWM packet via the WASM socket shim, which synchronously calls a JS callback
-2. **Physics step**: JS receives PWM values, updates the motor model and rigid body dynamics, computes new sensor data (IMU, position, attitude)
-3. **Sensor feedback**: Sensor data is written as JSON to the WASM recv buffer; ArduPilot reads it and advances its internal clock
-4. **MAVLink**: GCS commands (arm, mode, takeoff) are encoded as MAVLink v2 frames and written to a ring buffer UART bridge; ArduPilot responses flow back through the same bridge
-5. **Rendering**: Three.js renders the drone state at 60fps, decoupled from the physics/WASM loop
+1. **Loading**: Assets download in parallel with progress tracking. EKF initialization runs at 50x speed (~1s wall time vs 45s sim time)
+2. **Lockstep loop**: ArduPilot's JSON SIM backend sends servo PWM packets via the WASM socket shim, which synchronously calls a JS callback
+3. **Physics step**: JS receives PWM values, updates the motor model and MuJoCo rigid body, computes new sensor data (IMU, position, attitude)
+4. **Sensor feedback**: Sensor data is written as JSON to the WASM recv buffer; ArduPilot reads it and advances its internal clock
+5. **MAVLink**: Commands are encoded as MAVLink v2 frames and written to a ring buffer UART bridge; ArduPilot responses flow back through the same bridge
+6. **Rendering**: Three.js renders the Gaussian splat environment and drone model at 60fps via EffectComposer (FXAA). PIP camera renders independently with barrel distortion
 
 ## License
 
