@@ -6,7 +6,8 @@ import { Environment } from './environment';
 function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lodSplatCount?: number) {
   const spark = new SparkRenderer({
     renderer,
-    focalAdjustment: 2.0,
+    sortRadial: false,
+    blurAmount: 0.3,
     ...(lodSplatCount != null && { lodSplatCount }),
   });
   targetScene.add(spark);
@@ -21,7 +22,7 @@ function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lo
   targetScene.add(splat);
 }
 
-function createSkyAndLights(targetScene: THREE.Scene): THREE.Mesh {
+function createLights(targetScene: THREE.Scene): void {
   const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
   sunLight.position.set(50, 80, 30);
   targetScene.add(sunLight);
@@ -31,18 +32,6 @@ function createSkyAndLights(targetScene: THREE.Scene): THREE.Mesh {
 
   const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x556633, 0.4);
   targetScene.add(hemisphereLight);
-
-  const loader = new THREE.TextureLoader();
-  const skyTex = loader.load(`${import.meta.env.BASE_URL}textures/sky_panorama.jpg`);
-  skyTex.mapping = THREE.EquirectangularReflectionMapping;
-  const skyGeo = new THREE.SphereGeometry(4000, 32, 16);
-  const skyMat = new THREE.MeshBasicMaterial({
-    map: skyTex,
-    side: THREE.BackSide,
-  });
-  const sky = new THREE.Mesh(skyGeo, skyMat);
-  targetScene.add(sky);
-  return sky;
 }
 
 export function createScene(): {
@@ -52,10 +41,8 @@ export function createScene(): {
   renderer: THREE.WebGLRenderer;
   terrain: Terrain;
   environment: Environment;
-  sky: THREE.Mesh;
 } {
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x87ceeb, 200, 2500);
 
   const camera = new THREE.PerspectiveCamera(
     60,
@@ -71,15 +58,16 @@ export function createScene(): {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.shadowMap.enabled = true;
   renderer.toneMapping = THREE.NoToneMapping;
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  renderer.setClearColor(0x000000, 1);
   document.getElementById('canvas-container')!.appendChild(renderer.domElement);
 
-  const sky = createSkyAndLights(scene);
+  createLights(scene);
   createSplat(renderer, scene);
 
   // Separate PIP scene with its own splat sort order and lower LOD budget
   const pipScene = new THREE.Scene();
-  pipScene.fog = new THREE.Fog(0x87ceeb, 200, 2500);
-  createSkyAndLights(pipScene);
+  createLights(pipScene);
   createSplat(renderer, pipScene, 500_000);
 
   const terrain = new Terrain(scene);
@@ -92,5 +80,5 @@ export function createScene(): {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, pipScene, camera, renderer, terrain, environment, sky };
+  return { scene, pipScene, camera, renderer, terrain, environment };
 }
