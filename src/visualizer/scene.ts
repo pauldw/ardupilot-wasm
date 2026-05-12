@@ -22,7 +22,7 @@ function createSplat(renderer: THREE.WebGLRenderer, targetScene: THREE.Scene, lo
   targetScene.add(splat);
 }
 
-function createLights(targetScene: THREE.Scene): void {
+function createSkyAndLights(targetScene: THREE.Scene): THREE.Mesh {
   const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
   sunLight.position.set(50, 80, 30);
   targetScene.add(sunLight);
@@ -32,6 +32,19 @@ function createLights(targetScene: THREE.Scene): void {
 
   const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x556633, 0.4);
   targetScene.add(hemisphereLight);
+
+  const loader = new THREE.TextureLoader();
+  const skyTex = loader.load(`${import.meta.env.BASE_URL}textures/sky_panorama.jpg`);
+  skyTex.mapping = THREE.EquirectangularReflectionMapping;
+  targetScene.environment = skyTex;
+  const skyGeo = new THREE.SphereGeometry(4000, 32, 16);
+  const skyMat = new THREE.MeshBasicMaterial({
+    map: skyTex,
+    side: THREE.BackSide,
+  });
+  const sky = new THREE.Mesh(skyGeo, skyMat);
+  targetScene.add(sky);
+  return sky;
 }
 
 export function createScene(): {
@@ -41,6 +54,7 @@ export function createScene(): {
   renderer: THREE.WebGLRenderer;
   terrain: Terrain;
   environment: Environment;
+  sky: THREE.Mesh;
 } {
   const scene = new THREE.Scene();
 
@@ -62,12 +76,12 @@ export function createScene(): {
   renderer.setClearColor(0x000000, 1);
   document.getElementById('canvas-container')!.appendChild(renderer.domElement);
 
-  createLights(scene);
+  const sky = createSkyAndLights(scene);
   createSplat(renderer, scene);
 
   // Separate PIP scene with its own splat sort order and lower LOD budget
   const pipScene = new THREE.Scene();
-  createLights(pipScene);
+  createSkyAndLights(pipScene);
   createSplat(renderer, pipScene, 500_000);
 
   const terrain = new Terrain(scene);
@@ -80,5 +94,5 @@ export function createScene(): {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, pipScene, camera, renderer, terrain, environment };
+  return { scene, pipScene, camera, renderer, terrain, environment, sky };
 }
